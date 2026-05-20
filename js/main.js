@@ -14,6 +14,108 @@ const phases = {
     result: $('phase-result'),
 };
 
+// === SVG ICON SYSTEM ===
+let svgIconsLoaded = false;
+
+function loadSVGIcons() {
+    fetch('img/icons.svg')
+        .then(r => r.text())
+        .then(svgText => {
+            $('svg-icons').innerHTML = svgText;
+            svgIconsLoaded = true;
+        })
+        .catch(() => { svgIconsLoaded = false; });
+}
+
+
+// Map tags to icon IDs
+const TAG_ICON_MAP = {
+    'Weapon': 'icon-weapon',
+    'Bow': 'icon-bow',
+    'Dagger': 'icon-dagger',
+    'Spell': 'icon-spell',
+    'Relic': 'icon-relic',
+    'Skill': 'icon-skill',
+    'Skyspine': 'icon-skyspine'
+};
+
+const PACK_ICON_MAP = {
+    'mana': 'icon-pack-mana',
+    'doomsday': 'icon-pack-doomsday',
+    'lostmagic': 'icon-pack-lostmagic',
+    'dark': 'icon-pack-dark',
+    'gorthon': 'icon-pack-gorthon',
+    'church': 'icon-pack-church',
+    'neutral': 'icon-pack-neutral'
+};
+
+// Rarity color map for icon tinting
+const RARITY_COLORS = {
+    common: '#aaaacc',
+    rare: '#4488ff',
+    epic: '#bb55ff',
+    legendary: '#ffaa00',
+    relic: '#00ffcc',
+    cursed: '#ff44aa',
+    forged: '#ff6600'
+};
+
+function getTagIcon(item) {
+    const tag = item.tags[0] || 'Weapon';
+    const iconId = TAG_ICON_MAP[tag] || 'icon-weapon';
+    return iconId;
+}
+
+function getPackIcon(pack) {
+    return PACK_ICON_MAP[pack] || 'icon-pack-neutral';
+}
+
+function createSVGUse(iconId, width, height, color) {
+    const w = width || 32;
+    const h = height || 32;
+    const c = color || 'currentColor';
+    return `<svg width="${w}" height="${h}" style="color:${c}"><use href="#${iconId}"/></svg>`;
+}
+
+
+// === BACKGROUND PARTICLES ===
+function initParticles() {
+    const container = $('background-fx');
+    for (let i = 0; i < 25; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.left = Math.random() * 100 + '%';
+        p.style.animationDelay = Math.random() * 8 + 's';
+        p.style.animationDuration = (6 + Math.random() * 6) + 's';
+        const colors = ['#ffd700', '#6644ff', '#00ccaa', '#ff6600', '#4488ff'];
+        p.style.background = colors[Math.floor(Math.random() * colors.length)];
+        p.style.width = (1 + Math.random() * 2) + 'px';
+        p.style.height = p.style.width;
+        container.appendChild(p);
+    }
+}
+
+// === FLOATING DAMAGE NUMBERS ===
+function showDamageFloat(targetEl, text, type) {
+    if (!targetEl) return;
+    const rect = targetEl.getBoundingClientRect();
+    const dmgEl = document.createElement('div');
+    dmgEl.className = 'damage-float ' + (type || 'dmg-enemy');
+    dmgEl.textContent = text;
+    dmgEl.style.left = (rect.left + rect.width / 2 + (Math.random() - 0.5) * 30) + 'px';
+    dmgEl.style.top = (rect.top + Math.random() * 10) + 'px';
+    $('damage-numbers').appendChild(dmgEl);
+    setTimeout(() => dmgEl.remove(), 1300);
+}
+
+// === SCREEN SHAKE ===
+function screenShake() {
+    const app = $('app');
+    app.classList.add('screen-shake');
+    setTimeout(() => app.classList.remove('screen-shake'), 300);
+}
+
+
 // === SCREEN MANAGEMENT ===
 function showScreen(name) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
@@ -26,53 +128,70 @@ function showPhase(name) {
     state.phase = name;
 }
 
-
 // === HUD UPDATE ===
 function updateHUD() {
-    $('hud-day').textContent = `Day ${state.day}`;
-    $('hud-wins').textContent = `Wins: ${state.wins}/10`;
-    $('hud-gold').textContent = `Gold: ${state.gold}`;
-    $('hud-level').textContent = `Level: ${state.level}`;
-    let hearts = '';
-    for (let i = 0; i < state.maxHearts; i++) {
+    $('hud-day').textContent = 'Day ' + state.day;
+    $('hud-wins').textContent = 'Wins: ' + state.wins + '/10';
+    $('hud-gold').textContent = 'Gold: ' + state.gold;
+    $('hud-level').textContent = 'Level: ' + state.level;
+    var hearts = '';
+    for (var i = 0; i < state.maxHearts; i++) {
         hearts += i < state.hearts ? '❤️' : '🖤';
     }
     $('hud-hearts').textContent = hearts;
 }
 
+
 // === ITEM CARD RENDERING ===
-function renderItemCard(item, clickHandler, showCost = true) {
-    const card = document.createElement('div');
-    card.className = `item-card rarity-${item.rarity}`;
-    const starsStr = item.stars > 0 ? '★'.repeat(item.stars) : '';
-    card.innerHTML = `
-        <div class="item-rarity-bar"></div>
-        ${showCost ? `<span class="item-cost">${item.cost}g</span>` : ''}
-        <div class="item-name">${item.name} ${starsStr}</div>
-        <div class="item-stats">DMG:${item.damage} CD:${item.cooldown}s MC:${item.multicast}${item.crit ? ' C:'+item.crit+'%' : ''}</div>
-        <div class="item-pack">${PACKS[item.pack]?.name || item.pack}</div>
-        <div class="item-ability">${item.ability}</div>
-    `;
+function renderItemCard(item, clickHandler, showCost) {
+    if (showCost === undefined) showCost = true;
+    var card = document.createElement('div');
+    card.className = 'item-card rarity-' + item.rarity + ' pack-' + item.pack;
+
+    var tagIcon = getTagIcon(item);
+    var packIcon = getPackIcon(item.pack);
+    var iconColor = RARITY_COLORS[item.rarity] || '#aaaacc';
+    var starsStr = item.stars > 0 ? (' ' + '★'.repeat(item.stars)) : '';
+    var packColor = PACKS[item.pack] ? PACKS[item.pack].color : '#888';
+    var packName = PACKS[item.pack] ? PACKS[item.pack].name : item.pack;
+
+    card.innerHTML =
+        (showCost ? '<span class="item-cost">' + item.cost + 'g</span>' : '') +
+        '<div class="card-icon-area">' +
+            '<div class="card-pack-bg">' + createSVGUse(packIcon, 52, 52, packColor) + '</div>' +
+            createSVGUse(tagIcon, 32, 32, iconColor) +
+        '</div>' +
+        '<div class="card-body">' +
+            '<div class="item-name">' + item.name + '<span class="item-stars">' + starsStr + '</span></div>' +
+            '<div class="item-stats">' +
+                '<span class="stat-dmg">⚔' + item.damage + '</span>' +
+                '<span class="stat-cd">⏱' + item.cooldown + 's</span>' +
+                '<span class="stat-mc">✦' + item.multicast + '</span>' +
+            '</div>' +
+            '<div class="item-pack-badge" style="color:' + packColor + ';border-color:' + packColor + '40">' + packName + '</div>' +
+            '<div class="item-ability">' + item.ability + '</div>' +
+        '</div>';
+
     if (item.frozen) card.classList.add('frozen');
     if (clickHandler) card.addEventListener('click', clickHandler);
-    // Tooltip
-    card.addEventListener('mouseenter', e => showTooltip(e, item));
+    card.addEventListener('mouseenter', function(e) { showTooltip(e, item); });
     card.addEventListener('mouseleave', hideTooltip);
     return card;
 }
 
+
 function showTooltip(e, item) {
-    const tt = $('tooltip');
-    const starsStr = item.stars > 0 ? ' ' + '★'.repeat(item.stars) : '';
-    tt.innerHTML = `
-        <div class="tt-name">${item.name}${starsStr}</div>
-        <div class="tt-stats">DMG: ${item.damage} | CD: ${item.cooldown}s | MC: ${item.multicast} | Crit: ${item.crit}%</div>
-        <div class="tt-ability">${item.ability}</div>
-        <div class="tt-pack">${PACKS[item.pack]?.name || item.pack} | Tags: ${item.tags.join(', ')}</div>
-    `;
+    var tt = $('tooltip');
+    var starsStr = item.stars > 0 ? ' ' + '★'.repeat(item.stars) : '';
+    var packName = PACKS[item.pack] ? PACKS[item.pack].name : item.pack;
+    tt.innerHTML =
+        '<div class="tt-name" style="color:' + (RARITY_COLORS[item.rarity] || '#fff') + '">' + item.name + starsStr + '</div>' +
+        '<div class="tt-stats">DMG: ' + item.damage + ' | CD: ' + item.cooldown + 's | MC: ' + item.multicast + ' | Crit: ' + item.crit + '%</div>' +
+        '<div class="tt-ability">' + item.ability + '</div>' +
+        '<div class="tt-pack">' + packName + ' | Tags: ' + item.tags.join(', ') + '</div>';
     tt.classList.remove('hidden');
-    const x = Math.min(e.clientX + 10, window.innerWidth - 300);
-    const y = Math.min(e.clientY + 10, window.innerHeight - 150);
+    var x = Math.min(e.clientX + 12, window.innerWidth - 320);
+    var y = Math.min(e.clientY + 12, window.innerHeight - 160);
     tt.style.left = x + 'px';
     tt.style.top = y + 'px';
 }
@@ -81,13 +200,12 @@ function hideTooltip() {
     $('tooltip').classList.add('hidden');
 }
 
-
 // === SHOP RENDERING ===
 function renderShop() {
-    const grid = $('shop-items');
+    var grid = $('shop-items');
     grid.innerHTML = '';
-    state.shop.forEach((item, idx) => {
-        const card = renderItemCard(item, () => {
+    state.shop.forEach(function(item, idx) {
+        var card = renderItemCard(item, function() {
             if (buyItem(idx)) {
                 renderShop();
                 renderTower();
@@ -96,60 +214,61 @@ function renderShop() {
         });
         grid.appendChild(card);
     });
-    $('btn-levelup').textContent = `Level Up (${getLevelUpCost()}g)`;
+    $('btn-levelup').textContent = 'Level Up (' + getLevelUpCost() + 'g)';
     $('btn-levelup').disabled = state.gold < getLevelUpCost() || state.level >= 7;
     $('btn-refresh').textContent = state.freeRefresh ? 'Refresh (Free)' : 'Refresh (3g)';
 }
 
+
 // === TOWER RENDERING ===
 function renderTower() {
-    const grid = $('tower-slots');
+    var grid = $('tower-slots');
     grid.innerHTML = '';
-    for (let i = 0; i < state.towerMaxSlots; i++) {
+    for (var i = 0; i < state.towerMaxSlots; i++) {
         if (i < state.tower.length) {
-            const item = state.tower[i];
-            const card = renderItemCard(item, () => {
-                if (confirm(`Sell ${item.name} for ${Math.floor(item.cost*0.5)}g?`)) {
-                    sellItem(i);
-                    renderTower();
-                    renderShop();
-                    updateHUD();
-                }
-            }, false);
-            grid.appendChild(card);
+            var item = state.tower[i];
+            (function(idx, itm) {
+                var card = renderItemCard(itm, function() {
+                    if (confirm('Sell ' + itm.name + ' for ' + Math.floor(itm.cost * 0.5) + 'g?')) {
+                        sellItem(idx);
+                        renderTower();
+                        renderShop();
+                        updateHUD();
+                    }
+                }, false);
+                grid.appendChild(card);
+            })(i, item);
         } else {
-            const slot = document.createElement('div');
+            var slot = document.createElement('div');
             slot.className = 'tower-slot';
-            slot.textContent = `Slot ${i + 1}`;
+            slot.textContent = 'Slot ' + (i + 1);
             grid.appendChild(slot);
         }
     }
 }
 
-
 // === ENCOUNTER RENDERING ===
-function renderEncounter(encounterData, npcIdx = 0) {
+function renderEncounter(encounterData, npcIdx) {
+    if (npcIdx === undefined) npcIdx = 0;
     if (!encounterData || npcIdx >= encounterData.npcs.length) {
-        // No more encounters, proceed to combat
         startCombat();
         return;
     }
     showPhase('encounter');
-    const npc = encounterData.npcs[npcIdx];
+    var npc = encounterData.npcs[npcIdx];
     $('encounter-portrait').textContent = npc.icon;
     $('encounter-name').textContent = npc.name;
     $('encounter-flavor').textContent = npc.flavor;
-    const choicesDiv = $('encounter-choices');
+    var choicesDiv = $('encounter-choices');
     choicesDiv.innerHTML = '';
-    npc.choices.forEach(choice => {
-        const btn = document.createElement('div');
+    npc.choices.forEach(function(choice) {
+        var btn = document.createElement('div');
         btn.className = 'encounter-choice';
-        btn.innerHTML = `<h4>${choice.label}</h4><p>${choice.desc}</p>`;
-        btn.addEventListener('click', () => {
+        btn.innerHTML = '<h4>' + choice.label + '</h4><p>' + choice.desc + '</p>';
+        btn.addEventListener('click', function() {
             applyEncounterEffect(choice.effect);
             updateHUD();
             renderTower();
-            // Check for next NPC in same day
             if (npcIdx + 1 < encounterData.npcs.length) {
                 renderEncounter(encounterData, npcIdx + 1);
             } else {
@@ -162,28 +281,35 @@ function renderEncounter(encounterData, npcIdx = 0) {
 
 
 // === COMBAT PHASE ===
-let combatInterval = null;
+var combatInterval = null;
+var lastPlayerHP = 0;
+var lastEnemyHP = 0;
 
 function startCombat() {
     showPhase('combat');
-    const enemyTower = generateOpponent();
+    var enemyTower = generateOpponent();
+    var playerTower = state.tower.map(function(i) { return Object.assign({}, i); });
 
-    // Deep copy player tower for combat (so permanent gains persist)
-    const playerTower = state.tower.map(i => ({ ...i }));
-
-    const { combat, tick, TICK, playerTimers, enemyTimers } = simulateCombat(
+    var result = simulateCombat(
         playerTower, enemyTower,
-        (c, pt, et) => updateCombatUI(c, pt, et, playerTower, enemyTower),
-        (c) => endCombat(c)
+        function(c, pt, et) { updateCombatUI(c, pt, et, playerTower, enemyTower); },
+        function(c) { endCombat(c); }
     );
 
-    // Render initial state
+    var combat = result.combat;
+    var tick = result.tick;
+    var TICK = result.TICK;
+    var playerTimers = result.playerTimers;
+    var enemyTimers = result.enemyTimers;
+
+    lastPlayerHP = combat.playerHP;
+    lastEnemyHP = combat.enemyHP;
+
     renderCombatTowers(playerTower, enemyTower, playerTimers, enemyTimers);
     updateCombatUI(combat, playerTimers, enemyTimers, playerTower, enemyTower);
     $('combat-log').innerHTML = '';
 
-    // Run combat tick loop
-    combatInterval = setInterval(() => {
+    combatInterval = setInterval(function() {
         tick();
         if (combat.done && combatInterval) {
             clearInterval(combatInterval);
@@ -191,8 +317,7 @@ function startCombat() {
         }
     }, TICK * 1000);
 
-    // Skip button
-    $('btn-skip-combat').onclick = () => {
+    $('btn-skip-combat').onclick = function() {
         if (combatInterval) {
             clearInterval(combatInterval);
             combatInterval = null;
@@ -201,31 +326,42 @@ function startCombat() {
     };
 }
 
+
 function renderCombatTowers(playerTower, enemyTower, playerTimers, enemyTimers) {
-    const pDiv = $('player-tower-display');
-    const eDiv = $('enemy-tower-display');
+    var pDiv = $('player-tower-display');
+    var eDiv = $('enemy-tower-display');
     pDiv.innerHTML = '';
     eDiv.innerHTML = '';
-    playerTower.forEach((item, i) => {
-        const el = document.createElement('div');
+
+    playerTower.forEach(function(item, i) {
+        var el = document.createElement('div');
         el.className = 'combat-item';
-        el.id = `p-item-${i}`;
-        el.innerHTML = `<span>${item.name} (MC:${item.multicast})</span><span>DMG:${item.damage}</span>`;
-        const cdBar = document.createElement('div');
-        cdBar.className = 'cd-bar';
-        cdBar.style.width = '0%';
-        el.appendChild(cdBar);
+        el.id = 'p-item-' + i;
+        var tagIcon = getTagIcon(item);
+        var iconColor = RARITY_COLORS[item.rarity] || '#aaa';
+        el.innerHTML =
+            '<div class="combat-item-header">' +
+                '<span class="combat-item-icon">' + createSVGUse(tagIcon, 16, 16, iconColor) + '</span>' +
+                '<span class="combat-item-name">' + item.name + '</span>' +
+                '<span class="combat-item-dmg">' + item.damage + '</span>' +
+            '</div>' +
+            '<div class="cd-bar-bg"><div class="cd-bar" style="width:0%"></div></div>';
         pDiv.appendChild(el);
     });
-    enemyTower.forEach((item, i) => {
-        const el = document.createElement('div');
+
+    enemyTower.forEach(function(item, i) {
+        var el = document.createElement('div');
         el.className = 'combat-item';
-        el.id = `e-item-${i}`;
-        el.innerHTML = `<span>${item.name} (MC:${item.multicast})</span><span>DMG:${item.damage}</span>`;
-        const cdBar = document.createElement('div');
-        cdBar.className = 'cd-bar';
-        cdBar.style.width = '0%';
-        el.appendChild(cdBar);
+        el.id = 'e-item-' + i;
+        var tagIcon = getTagIcon(item);
+        var iconColor = RARITY_COLORS[item.rarity] || '#aaa';
+        el.innerHTML =
+            '<div class="combat-item-header">' +
+                '<span class="combat-item-icon">' + createSVGUse(tagIcon, 16, 16, iconColor) + '</span>' +
+                '<span class="combat-item-name">' + item.name + '</span>' +
+                '<span class="combat-item-dmg">' + item.damage + '</span>' +
+            '</div>' +
+            '<div class="cd-bar-bg"><div class="cd-bar" style="width:0%"></div></div>';
         eDiv.appendChild(el);
     });
 }
@@ -233,69 +369,104 @@ function renderCombatTowers(playerTower, enemyTower, playerTimers, enemyTimers) 
 
 function updateCombatUI(combat, playerTimers, enemyTimers, playerTower, enemyTower) {
     // HP Bars
-    const pPct = Math.max(0, (combat.playerHP / combat.playerMaxHP) * 100);
-    const ePct = Math.max(0, (combat.enemyHP / combat.enemyMaxHP) * 100);
+    var pPct = Math.max(0, (combat.playerHP / combat.playerMaxHP) * 100);
+    var ePct = Math.max(0, (combat.enemyHP / combat.enemyMaxHP) * 100);
     $('player-hp-bar').style.width = pPct + '%';
     $('enemy-hp-bar').style.width = ePct + '%';
-    const pShield = combat.playerShield > 0 ? ` [+${combat.playerShield} Shield]` : '';
-    const eShield = combat.enemyShield > 0 ? ` [+${combat.enemyShield} Shield]` : '';
-    $('player-hp-text').textContent = `${Math.max(0,Math.floor(combat.playerHP))} / ${combat.playerMaxHP}${pShield}`;
-    $('enemy-hp-text').textContent = `${Math.max(0,Math.floor(combat.enemyHP))} / ${combat.enemyMaxHP}${eShield}`;
+    var pShield = combat.playerShield > 0 ? ' [+' + combat.playerShield + ' Shield]' : '';
+    var eShield = combat.enemyShield > 0 ? ' [+' + combat.enemyShield + ' Shield]' : '';
+    $('player-hp-text').textContent = Math.max(0, Math.floor(combat.playerHP)) + ' / ' + combat.playerMaxHP + pShield;
+    $('enemy-hp-text').textContent = Math.max(0, Math.floor(combat.enemyHP)) + ' / ' + combat.enemyMaxHP + eShield;
+
+    // Floating damage numbers on HP change
+    var playerDmgTaken = lastPlayerHP - combat.playerHP;
+    var enemyDmgTaken = lastEnemyHP - combat.enemyHP;
+
+    if (enemyDmgTaken > 5) {
+        var enemyBar = $('enemy-hp-bar').parentElement;
+        showDamageFloat(enemyBar, '-' + Math.floor(enemyDmgTaken), 'dmg-enemy');
+        if (enemyDmgTaken > 50) screenShake();
+    }
+    if (playerDmgTaken > 5) {
+        var playerBar = $('player-hp-bar').parentElement;
+        showDamageFloat(playerBar, '-' + Math.floor(playerDmgTaken), 'dmg-player');
+        if (playerDmgTaken > 50) screenShake();
+    }
+    if (playerDmgTaken < -5) {
+        var playerBar2 = $('player-hp-bar').parentElement;
+        showDamageFloat(playerBar2, '+' + Math.floor(-playerDmgTaken), 'heal-player');
+    }
+
+    lastPlayerHP = combat.playerHP;
+    lastEnemyHP = combat.enemyHP;
 
     // Cooldown bars & firing highlights
-    playerTimers.forEach((t, i) => {
-        const el = document.getElementById(`p-item-${i}`);
+    playerTimers.forEach(function(t, i) {
+        var el = document.getElementById('p-item-' + i);
         if (!el) return;
-        const bar = el.querySelector('.cd-bar');
-        if (bar && t.item.cooldown > 0) bar.style.width = (t.elapsed / t.cd * 100) + '%';
-        el.classList.toggle('firing', t.triggered);
+        var bar = el.querySelector('.cd-bar');
+        if (bar && t.item.cooldown > 0) {
+            var pct = (t.elapsed / t.cd * 100);
+            bar.style.width = pct + '%';
+            if (pct >= 95) bar.classList.add('cd-ready');
+            else bar.classList.remove('cd-ready');
+        }
+        if (t.triggered) {
+            el.classList.add('firing');
+            setTimeout(function() { el.classList.remove('firing'); }, 250);
+        }
     });
-    enemyTimers.forEach((t, i) => {
-        const el = document.getElementById(`e-item-${i}`);
+    enemyTimers.forEach(function(t, i) {
+        var el = document.getElementById('e-item-' + i);
         if (!el) return;
-        const bar = el.querySelector('.cd-bar');
-        if (bar && t.item.cooldown > 0) bar.style.width = (t.elapsed / t.cd * 100) + '%';
-        el.classList.toggle('firing', t.triggered);
+        var bar = el.querySelector('.cd-bar');
+        if (bar && t.item.cooldown > 0) {
+            var pct = (t.elapsed / t.cd * 100);
+            bar.style.width = pct + '%';
+            if (pct >= 95) bar.classList.add('cd-ready');
+            else bar.classList.remove('cd-ready');
+        }
+        if (t.triggered) {
+            el.classList.add('firing');
+            setTimeout(function() { el.classList.remove('firing'); }, 250);
+        }
     });
 
-    // Combat Log (last 30 entries)
-    const logDiv = $('combat-log');
-    const entries = combat.log.slice(-30);
-    logDiv.innerHTML = entries.map(entry => {
-        let cls = '';
+    // Combat Log
+    var logDiv = $('combat-log');
+    var entries = combat.log.slice(-30);
+    logDiv.innerHTML = entries.map(function(entry) {
+        var cls = '';
         if (entry.includes('dmg') || entry.includes('damage')) cls = 'log-damage';
         if (entry.includes('heal') || entry.includes('Shield')) cls = 'log-heal';
         if (entry.includes('multicast') || entry.includes('synergy')) cls = 'log-effect';
-        return `<div class="log-entry ${cls}">${entry}</div>`;
+        return '<div class="log-entry ' + cls + '">' + entry + '</div>';
     }).join('');
     logDiv.scrollTop = logDiv.scrollHeight;
 }
 
 
 function endCombat(combat) {
-    // Apply permanent damage/multicast gains back to state tower
-    // (items that gained permanent stats during combat keep them)
     showPhase('result');
-    const won = combat.winner === 'player';
+    var won = combat.winner === 'player';
     if (won) {
         state.wins++;
         $('result-title').textContent = '⚔️ VICTORY!';
-        $('result-title').style.color = '#44cc44';
-        $('result-detail').textContent = `Your tower overwhelmed the enemy! Wins: ${state.wins}/10`;
+        $('result-title').style.color = '#44ee77';
+        $('result-detail').textContent = 'Your tower overwhelmed the enemy! Wins: ' + state.wins + '/10';
     } else {
-        const heartsLost = getHeartsLost();
+        var heartsLost = getHeartsLost();
         state.hearts = Math.max(0, state.hearts - heartsLost);
         $('result-title').textContent = '💀 DEFEAT';
         $('result-title').style.color = '#ff4444';
-        $('result-detail').textContent = `You lost ${heartsLost} heart(s). Hearts remaining: ${state.hearts}`;
+        $('result-detail').textContent = 'You lost ' + heartsLost + ' heart(s). Hearts remaining: ' + state.hearts;
     }
     updateHUD();
 
-    // Check game end conditions
     if (state.wins >= 10) {
-        setTimeout(() => showGameOver(true), 500);
+        setTimeout(function() { showGameOver(true); }, 500);
     } else if (state.hearts <= 0) {
-        setTimeout(() => showGameOver(false), 500);
+        setTimeout(function() { showGameOver(false); }, 500);
     }
 }
 
@@ -310,12 +481,11 @@ function showGameOver(won) {
         $('gameover-title').style.color = '#ff4444';
         $('gameover-detail').textContent = 'The Doomsday claimed your tower...';
     }
-    $('gameover-stats').innerHTML = `
-        <p>Days survived: ${state.day}</p>
-        <p>Wins: ${state.wins} / 10</p>
-        <p>Level reached: ${state.level}</p>
-        <p>Items in tower: ${state.tower.length}</p>
-    `;
+    $('gameover-stats').innerHTML =
+        '<p>Days survived: ' + state.day + '</p>' +
+        '<p>Wins: ' + state.wins + ' / 10</p>' +
+        '<p>Level reached: ' + state.level + '</p>' +
+        '<p>Items in tower: ' + state.tower.length + '</p>';
 }
 
 
@@ -323,14 +493,11 @@ function showGameOver(won) {
 function nextDay() {
     startNewDay();
     updateHUD();
-
-    // Check for encounters on this day
-    const encounter = getEncounterForDay(state.day);
+    var encounter = getEncounterForDay(state.day);
     if (encounter) {
         renderShop();
         renderTower();
         showPhase('shop');
-        // Show encounter before combat when player hits "ready"
         state._pendingEncounter = encounter;
     } else {
         state._pendingEncounter = null;
@@ -347,7 +514,7 @@ function onReady() {
         return;
     }
     if (state._pendingEncounter) {
-        const enc = state._pendingEncounter;
+        var enc = state._pendingEncounter;
         state._pendingEncounter = null;
         renderEncounter(enc, 0);
     } else {
@@ -357,16 +524,16 @@ function onReady() {
 
 // === PERK SCREEN ===
 function renderPerks() {
-    const grid = $('perk-list');
+    var grid = $('perk-list');
     grid.innerHTML = '';
-    PERKS.forEach(perk => {
-        const card = document.createElement('div');
+    PERKS.forEach(function(perk) {
+        var card = document.createElement('div');
         card.className = 'perk-card';
-        card.innerHTML = `<h4>${perk.name}</h4><p>${perk.desc}</p>`;
-        card.addEventListener('click', () => {
+        card.innerHTML = '<h4>' + perk.name + '</h4><p>' + perk.desc + '</p>';
+        card.addEventListener('click', function() {
             if (card.classList.contains('selected')) {
                 card.classList.remove('selected');
-                state.selectedPerks = state.selectedPerks.filter(p => p !== perk.id);
+                state.selectedPerks = state.selectedPerks.filter(function(p) { return p !== perk.id; });
             } else if (state.selectedPerks.length < 3) {
                 card.classList.add('selected');
                 state.selectedPerks.push(perk.id);
@@ -379,14 +546,20 @@ function renderPerks() {
 
 // === INITIALIZATION & EVENT LISTENERS ===
 function init() {
+    // Load SVG icons
+    loadSVGIcons();
+
+    // Init background particles
+    initParticles();
+
     // Title screen buttons
-    $('btn-casual').addEventListener('click', () => {
+    $('btn-casual').addEventListener('click', function() {
         state.mode = 'casual';
         resetState();
         renderPerks();
         showScreen('perks');
     });
-    $('btn-ranked').addEventListener('click', () => {
+    $('btn-ranked').addEventListener('click', function() {
         state.mode = 'ranked';
         resetState();
         renderPerks();
@@ -394,13 +567,9 @@ function init() {
     });
 
     // Perk screen
-    $('btn-start-run').addEventListener('click', () => {
-        // Apply starting perks
+    $('btn-start-run').addEventListener('click', function() {
         if (state.selectedPerks.includes('doomsday_veteran')) {
             state.gold += 10;
-        }
-        if (state.selectedPerks.includes('expanded_stock')) {
-            // Handled in shop generation
         }
         showScreen('game');
         generateShop();
@@ -411,17 +580,17 @@ function init() {
     });
 
     // Shop buttons
-    $('btn-refresh').addEventListener('click', () => {
+    $('btn-refresh').addEventListener('click', function() {
         if (refreshShop()) {
             renderShop();
             updateHUD();
         }
     });
-    $('btn-freeze').addEventListener('click', () => {
+    $('btn-freeze').addEventListener('click', function() {
         freezeShop();
         renderShop();
     });
-    $('btn-levelup').addEventListener('click', () => {
+    $('btn-levelup').addEventListener('click', function() {
         if (levelUp()) {
             renderShop();
             renderTower();
@@ -434,7 +603,7 @@ function init() {
     $('btn-next-day').addEventListener('click', nextDay);
 
     // Restart
-    $('btn-restart').addEventListener('click', () => {
+    $('btn-restart').addEventListener('click', function() {
         resetState();
         showScreen('title');
     });

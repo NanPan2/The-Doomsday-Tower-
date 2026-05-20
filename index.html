@@ -7,11 +7,21 @@
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+    <!-- Background Effects -->
+    <div id="background-fx"></div>
+    
+    <!-- Floating Damage Numbers Container -->
+    <div id="damage-numbers"></div>
+
+    <!-- SVG Icons (loaded inline for use with <use>) -->
+    <div id="svg-icons" style="display:none"></div>
+
     <div id="app">
         <!-- Title Screen -->
         <div id="screen-title" class="screen active">
             <div class="title-container">
                 <h1 class="game-title">THE DOOMSDAY TOWER</h1>
+
                 <p class="subtitle">A synergy-driven autobattler set in the world of Aleria</p>
                 <div class="menu-buttons">
                     <button id="btn-casual" class="btn btn-primary">Casual Mode</button>
@@ -46,6 +56,7 @@
                 </div>
             </div>
 
+
             <!-- Shop Phase -->
             <div id="phase-shop" class="phase">
                 <div class="shop-header">
@@ -73,6 +84,7 @@
                     <div id="encounter-choices" class="encounter-choices"></div>
                 </div>
             </div>
+
 
             <!-- Combat Phase -->
             <div id="phase-combat" class="phase hidden">
@@ -108,6 +120,7 @@
                 </div>
             </div>
         </div>
+
 
         <!-- Game Over Screen -->
         <div id="screen-gameover" class="screen">
