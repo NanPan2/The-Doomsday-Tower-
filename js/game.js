@@ -20,12 +20,22 @@ const state = {
     phase: 'shop',
     inventory: [],
     potionGenerationQueue: [],
+    xp: 0,
+    endless: false,
+    endlessDay: 0,
 };
+
+// === XP THRESHOLDS ===
+var XP_THRESHOLDS = [0, 10, 25, 45, 70, 100, 140];
+
+// === COMBAT SPEED ===
+var combatSpeed = 1;
 
 function resetState() {
     state.day = 1;
     state.wins = 0;
     state.hearts = 10;
+    state.maxHearts = 10;
     state.gold = 55;
     state.income = 45;
     state.level = 1;
@@ -39,6 +49,10 @@ function resetState() {
     state.phase = 'shop';
     state.inventory = [];
     state.potionGenerationQueue = [];
+    state.xp = 0;
+    state.endless = false;
+    state.endlessDay = 0;
+    combatSpeed = 1;
 }
 
 
@@ -111,11 +125,33 @@ function freezeShop() {
 function buyItem(shopIndex) {
     const item = state.shop[shopIndex];
     if (!item || state.gold < item.cost) return false;
+    // Check for fusion: if tower already has item with same id and stars < 3
+    var fusionTarget = null;
+    for (var i = 0; i < state.tower.length; i++) {
+        if (state.tower[i].id === item.id && state.tower[i].stars < 3) {
+            fusionTarget = i;
+            break;
+        }
+    }
+    if (fusionTarget !== null) {
+        state.gold -= item.cost;
+        fuseItem(state.tower[fusionTarget]);
+        state.shop.splice(shopIndex, 1);
+        state._lastFusion = fusionTarget;
+        return 'fused';
+    }
     if (state.tower.length >= state.towerMaxSlots) return false;
     state.gold -= item.cost;
     state.tower.push({ ...item });
     state.shop.splice(shopIndex, 1);
+    state._lastFusion = null;
     return true;
+}
+
+function fuseItem(existingItem) {
+    existingItem.stars = Math.min(3, existingItem.stars + 1);
+    existingItem.damage = Math.floor(existingItem.damage * 1.25);
+    existingItem.multicast += 1;
 }
 
 function sellItem(towerIndex) {
@@ -213,24 +249,30 @@ function addRandomVialToInventory() {
     state.inventory.push({ ...template, isPotion: true, uid: crypto.randomUUID() });
 }
 
-function levelUp() {
-    const cost = 4 * (state.level - 1) + 48;
-    if (state.gold < cost || state.level >= 7) return false;
-    state.gold -= cost;
-    state.level++;
-    state.income += 5;
-    // Treasure perk: free epic at level 5
-    if (state.level === 5 && state.selectedPerks.includes('treasure')) {
-        const epics = ITEMS.filter(i => i.rarity === 'epic');
-        if (epics.length && state.tower.length < state.towerMaxSlots) {
-            state.tower.push(createShopItem(pick(epics)));
+function addXP(amount) {
+    if (state.level >= 7) return;
+    state.xp += amount;
+    while (state.level < 7 && state.xp >= XP_THRESHOLDS[state.level]) {
+        state.xp -= XP_THRESHOLDS[state.level];
+        state.level++;
+        state.income += 5;
+        // Treasure perk: free epic at level 5
+        if (state.level === 5 && state.selectedPerks.includes('treasure')) {
+            const epics = ITEMS.filter(function(i) { return i.rarity === 'epic'; });
+            if (epics.length && state.tower.length < state.towerMaxSlots) {
+                state.tower.push(createShopItem(pick(epics)));
+            }
         }
     }
-    return true;
+}
+
+function levelUp() {
+    // Kept for compatibility but now XP-driven
+    return false;
 }
 
 function getLevelUpCost() {
-    return 4 * (state.level - 1) + 48;
+    return 999;
 }
 
 // === DAY PROGRESSION ===
@@ -254,11 +296,19 @@ function getHeartsLost() {
 
 // === ENCOUNTER LOGIC ===
 function getEncounterForDay(day) {
-    return ENCOUNTERS.find(e => e.day === day);
+    if (state.endless) {
+        // In endless mode, cycle encounters using modulo 11
+        var cycledDay = (day % 11);
+        if (cycledDay === 0) cycledDay = 11;
+        return ENCOUNTERS.find(function(e) { return e.day === cycledDay; });
+    }
+    return ENCOUNTERS.find(function(e) { return e.day === day; });
 }
 
 
 function applyEncounterEffect(effect) {
+    // Grant XP for encounter choice
+    addXP(5);
     switch (effect) {
         case 'giveRandomRare': {
             const rares = ITEMS.filter(i => i.rarity === 'rare');
@@ -365,7 +415,11 @@ function generateOpponent() {
         const items = ITEMS.filter(i => i.rarity === rarity);
         for (let w = 0; w < weight; w++) pool.push(...items);
     }
-    const numItems = Math.min(state.day + 1, 6);
+    var numItems = Math.min(state.day + 1, 6);
+    // Endless mode: scale items more aggressively
+    if (state.endless) {
+        numItems = Math.min(6, numItems + Math.floor(state.endlessDay / 3));
+    }
     const tower = [];
     for (let i = 0; i < numItems; i++) {
         const template = pick(pool);
@@ -373,6 +427,11 @@ function generateOpponent() {
         // Scale stars with day
         if (state.day >= 6 && Math.random() > 0.6) item.stars = 1;
         if (state.day >= 9 && Math.random() > 0.7) item.stars = 2;
+        // Endless mode: extra star scaling
+        if (state.endless) {
+            var bonusStars = Math.floor(state.endlessDay / 5);
+            item.stars = Math.min(3, item.stars + bonusStars);
+        }
         if (item.stars > 0) {
             item.damage = Math.floor(item.damage * (1 + item.stars * 0.25));
             item.multicast += item.stars;
@@ -776,3 +835,13 @@ function applyDots(combat) {
     }
 }
 
+
+
+
+// === ENDLESS MODE ===
+function enterEndlessMode() {
+    state.endless = true;
+    state.endlessDay = 0;
+    state.hearts = 5;
+    state.maxHearts = 5;
+}

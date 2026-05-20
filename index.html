@@ -46,6 +46,7 @@
                 <div class="hud-left">
                     <span id="hud-day" class="hud-item">Day 1</span>
                     <span id="hud-wins" class="hud-item">Wins: 0/10</span>
+                    <span id="hud-endless-badge" class="endless-badge hidden">ENDLESS</span>
                 </div>
                 <div class="hud-center">
                     <span id="hud-hearts" class="hud-item hearts"></span>
@@ -53,6 +54,10 @@
                 <div class="hud-right">
                     <span id="hud-gold" class="hud-item">Gold: 55</span>
                     <span id="hud-level" class="hud-item">Level: 1</span>
+                    <div id="hud-xp-container" class="xp-container">
+                        <div id="hud-xp-bar" class="xp-bar"></div>
+                        <span id="hud-xp-text" class="xp-text">XP: 0/10</span>
+                    </div>
                 </div>
             </div>
 
@@ -64,7 +69,7 @@
                     <div class="shop-actions">
                         <button id="btn-refresh" class="btn btn-small">Refresh (3g)</button>
                         <button id="btn-freeze" class="btn btn-small">Freeze Shop</button>
-                        <button id="btn-levelup" class="btn btn-small">Level Up</button>
+                        <button id="btn-levelup" class="btn btn-small" style="display:none;">Level Up</button>
                     </div>
                 </div>
                 <div id="shop-items" class="shop-grid"></div>
@@ -116,7 +121,14 @@
                     </div>
                 </div>
                 <div id="combat-log" class="combat-log"></div>
-                <button id="btn-skip-combat" class="btn btn-small">Skip</button>
+                <div class="combat-controls">
+                    <div class="speed-buttons">
+                        <button id="btn-speed-1" class="btn btn-small speed-btn speed-active">1x</button>
+                        <button id="btn-speed-2" class="btn btn-small speed-btn">2x</button>
+                        <button id="btn-speed-3" class="btn btn-small speed-btn">3x</button>
+                    </div>
+                    <button id="btn-skip-combat" class="btn btn-small">Skip</button>
+                </div>
             </div>
 
             <!-- Combat Result -->
@@ -124,6 +136,12 @@
                 <div class="result-container">
                     <h2 id="result-title"></h2>
                     <p id="result-detail"></p>
+                    <div id="xp-gain-display" class="xp-gain-display hidden"></div>
+                    <div id="endless-choice" class="endless-choice hidden">
+                        <p class="endless-choice-text">You have won 10 combats! Choose your path:</p>
+                        <button id="btn-end-run" class="btn btn-primary">End Run</button>
+                        <button id="btn-endless-mode" class="btn btn-ranked">Enter Endless Mode</button>
+                    </div>
                     <button id="btn-next-day" class="btn btn-primary">Next Day</button>
                 </div>
             </div>
