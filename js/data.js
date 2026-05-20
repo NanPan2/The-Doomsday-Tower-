@@ -77,6 +77,23 @@ const ITEMS = [
     { id: 'cursed_blade', name: 'Cursed Blade', rarity: 'cursed', damage: 40, cooldown: 2.5, crit: 20, multicast: 1, tags: ['Weapon'], pack: 'dark', cost: 35, ability: 'On trigger: Deal 40 damage. Take 10 damage to self.' },
     { id: 'cursed_shield', name: 'Cursed Shield', rarity: 'cursed', damage: 0, cooldown: 5.0, crit: 0, multicast: 3, tags: ['Skill'], pack: 'dark', cost: 40, ability: 'Start of Combat: Permanently gain +3 multicast. Take 50 self-damage.' },
     { id: 'blood_chalice', name: 'Blood Chalice', rarity: 'cursed', damage: 0, cooldown: 4.0, crit: 0, multicast: 1, tags: ['Relic'], pack: 'dark', cost: 38, ability: 'On trigger: Heal 40 HP. Apply 5 Bleed to self.' },
+
+    // --- POTION-GENERATING WEAPONS ---
+    { id: 'alchemists_retort', name: "Alchemist's Retort", rarity: 'rare', damage: 8, cooldown: 4.0, crit: 0, multicast: 1, tags: ['Weapon'], pack: 'mana', cost: 40, ability: 'On trigger: Generate 1 random Vial to inventory.', special: 'generate_random_vial' },
+    { id: 'brew_cauldron', name: 'Brew Cauldron', rarity: 'epic', damage: 0, cooldown: 6.0, crit: 0, multicast: 1, tags: ['Weapon'], pack: 'neutral', cost: 65, ability: 'Every 3 triggers: Generate 1 Phantom Brew to inventory.', special: 'generate_phantom_brew' },
+    { id: 'pompas_distiller', name: 'Pompas Distiller', rarity: 'rare', damage: 0, cooldown: 5.0, crit: 0, multicast: 1, tags: ['Weapon'], pack: 'church', cost: 35, ability: 'On trigger: Generate 1 Health Vial to inventory.', special: 'generate_health_vial' },
+
+    // --- PASSIVE HEALTH REGEN WEAPONS ---
+    { id: 'lifewell_totem', name: 'Lifewell Totem', rarity: 'common', damage: 0, cooldown: 3.0, crit: 0, multicast: 1, tags: ['Skill'], pack: 'church', cost: 20, ability: 'On trigger: Heal 15 HP.', special: 'heal_trigger' },
+    { id: 'mending_aura', name: 'Mending Aura', rarity: 'rare', damage: 0, cooldown: 4.5, crit: 0, multicast: 1, tags: ['Skill'], pack: 'church', cost: 38, ability: 'On trigger: Heal 25 HP. Gain +2 heal per trigger permanently.', special: 'mending_aura' },
+    { id: 'sanctified_chalice', name: 'Sanctified Chalice', rarity: 'epic', damage: 0, cooldown: 6.0, crit: 0, multicast: 1, tags: ['Skill'], pack: 'church', cost: 52, ability: 'On trigger: Heal 50 HP and give +5 Shield.', special: 'heal_and_shield' },
+
+    // --- STACKING STAT WEAPONS ---
+    { id: 'accumulator', name: 'Accumulator', rarity: 'common', damage: 5, cooldown: 2.0, crit: 0, multicast: 1, tags: ['Weapon'], pack: 'gorthon', cost: 22, ability: 'On trigger: Permanently gain +1 damage.', special: 'stack_damage' },
+    { id: 'battle_hardened_axe', name: 'Battle-Hardened Axe', rarity: 'rare', damage: 20, cooldown: 3.5, crit: 5, multicast: 1, tags: ['Weapon'], pack: 'doomsday', cost: 38, ability: 'After every 5 triggers: Gain +8 damage and +5% crit permanently.', special: 'stack_5_trigger' },
+    { id: 'mana_capacitor', name: 'Mana Capacitor', rarity: 'epic', damage: 15, cooldown: 3.0, crit: 0, multicast: 1, tags: ['Spell'], pack: 'mana', cost: 58, ability: 'On trigger: Permanently gain +1 multicast every 4th trigger.', special: 'stack_multicast_4' },
+    { id: 'void_siphon', name: 'Void Siphon', rarity: 'rare', damage: 12, cooldown: 2.8, crit: 0, multicast: 1, tags: ['Weapon'], pack: 'dark', cost: 36, ability: 'On trigger: Gain +1 damage per debuff on enemy. Stacks permanently.', special: 'stack_debuff_damage' },
+    { id: 'elven_amplifier', name: 'Elven Amplifier', rarity: 'legendary', damage: 10, cooldown: 1.5, crit: 0, multicast: 2, tags: ['Weapon'], pack: 'gorthon', cost: 72, ability: 'On trigger: Permanently gain +0.5 multicast every 3rd trigger.', special: 'stack_multicast_3' },
 ];
 
 
@@ -152,6 +169,22 @@ const ENCOUNTERS = [
             { label: 'Blessing of Ucliat', desc: '+1 multicast to all Spell items permanently.', effect: 'spellMulticast' },
           ]},
     ]},
+];
+
+// === POTIONS DATABASE ===
+const POTIONS = [
+    { id: 'damage_vial', name: 'Damage Vial', cost: 12, type: 'weapon-buff', desc: '+4 damage to target item.', effectType: 'damage', effectValue: 4, color: '#ff4444' },
+    { id: 'crit_vial', name: 'Crit Vial', cost: 12, type: 'weapon-buff', desc: '+10% crit chance to target item.', effectType: 'crit', effectValue: 10, color: '#4488ff' },
+    { id: 'heal_vial', name: 'Heal Vial', cost: 14, type: 'weapon-buff', desc: '+4 heal on trigger to target item.', effectType: 'heal', effectValue: 4, color: '#44ee77' },
+    { id: 'mana_poison_vial', name: 'Mana Poison Vial', cost: 14, type: 'weapon-buff', desc: '+2 Mana Poison on trigger to target item.', effectType: 'poison', effectValue: 2, color: '#aa44ff' },
+    { id: 'burn_vial', name: 'Burn Vial', cost: 14, type: 'weapon-buff', desc: '+2 Burn on trigger to target item.', effectType: 'burn', effectValue: 2, color: '#ff6633' },
+    { id: 'shield_vial', name: 'Shield Vial', cost: 14, type: 'weapon-buff', desc: '+4 Shield on trigger to target item.', effectType: 'shield', effectValue: 4, color: '#66ccff' },
+    { id: 'time_vial', name: 'Time Vial', cost: 18, type: 'weapon-buff', desc: '-0.2s cooldown to target item.', effectType: 'cooldown', effectValue: 0.2, color: '#ffdd00' },
+    { id: 'phantom_brew', name: 'Phantom Brew', cost: 55, type: 'weapon-buff', desc: '+1 multicast to target item.', effectType: 'multicast', effectValue: 1, color: '#bb44ff' },
+    { id: 'health_vial', name: 'Health Vial', cost: 10, type: 'tower-buff', desc: '+150 max tower HP.', effectType: 'maxhp', effectValue: 150, color: '#44ee77' },
+    { id: 'mending_serum', name: 'Mending Serum', cost: 20, type: 'weapon-buff', desc: '+8 heal on trigger to target item.', effectType: 'healboost', effectValue: 8, color: '#22cc66' },
+    { id: 'morph_vial', name: 'Morph Vial', cost: 22, type: 'utility', desc: 'Transform target item into random item of same rarity.', effectType: 'morph', effectValue: 0, color: '#ff8800' },
+    { id: 'crownforge_brew', name: 'Crownforge Brew', cost: 45, type: 'utility', desc: 'Upgrade target item star level by 1.', effectType: 'upgrade', effectValue: 1, color: '#ffd700' },
 ];
 
 // === LEVEL THRESHOLDS FOR RARITY ACCESS ===

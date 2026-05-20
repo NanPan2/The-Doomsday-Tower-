@@ -18,6 +18,8 @@ const state = {
     permanentBonuses: { shieldStart: 0, bonusHP: 0, cooldownReduction: 0 },
     guaranteeRelic: false,
     phase: 'shop',
+    inventory: [],
+    potionGenerationQueue: [],
 };
 
 function resetState() {
@@ -35,6 +37,8 @@ function resetState() {
     state.permanentBonuses = { shieldStart: 0, bonusHP: 0, cooldownReduction: 0 };
     state.guaranteeRelic = false;
     state.phase = 'shop';
+    state.inventory = [];
+    state.potionGenerationQueue = [];
 }
 
 
@@ -68,8 +72,18 @@ function generateShop() {
         const template = pick(pool);
         state.shop.push(createShopItem(template));
     }
+    // Add 1-2 potions to the shop
+    var potionCount = Math.random() < 0.5 ? 1 : 2;
+    for (var p = 0; p < potionCount; p++) {
+        var potionTemplate = pick(POTIONS);
+        state.shop.push(createShopPotion(potionTemplate));
+    }
     // Free refresh for Adventurer's Guild perk
     state.freeRefresh = state.selectedPerks.includes('adventurers_guild');
+}
+
+function createShopPotion(template) {
+    return { ...template, isPotion: true, frozen: false, uid: crypto.randomUUID() };
 }
 
 function createShopItem(template) {
@@ -111,6 +125,92 @@ function sellItem(towerIndex) {
     state.gold += refund;
     state.tower.splice(towerIndex, 1);
     return refund;
+}
+
+// === POTION BUYING & APPLYING ===
+function buyPotion(shopIndex) {
+    var item = state.shop[shopIndex];
+    if (!item || !item.isPotion) return false;
+    if (state.gold < item.cost) return false;
+    state.gold -= item.cost;
+    state.inventory.push({ ...item });
+    state.shop.splice(shopIndex, 1);
+    return true;
+}
+
+function applyPotion(potionIndex, towerIndex) {
+    var potion = state.inventory[potionIndex];
+    if (!potion) return false;
+
+    // Health Vial targets the tower HP, not an item
+    if (potion.effectType === 'maxhp') {
+        state.permanentBonuses.bonusHP += potion.effectValue;
+        state.inventory.splice(potionIndex, 1);
+        return true;
+    }
+
+    var item = state.tower[towerIndex];
+    if (!item) return false;
+
+    switch (potion.effectType) {
+        case 'damage':
+            item.damage += potion.effectValue;
+            break;
+        case 'crit':
+            item.crit += potion.effectValue;
+            break;
+        case 'heal':
+            item.healOnTrigger = (item.healOnTrigger || 0) + potion.effectValue;
+            break;
+        case 'poison':
+            item.poisonOnTrigger = (item.poisonOnTrigger || 0) + potion.effectValue;
+            break;
+        case 'burn':
+            item.burnOnTrigger = (item.burnOnTrigger || 0) + potion.effectValue;
+            break;
+        case 'shield':
+            item.shieldOnTrigger = (item.shieldOnTrigger || 0) + potion.effectValue;
+            break;
+        case 'cooldown':
+            item.cooldown = Math.max(0.3, item.cooldown - potion.effectValue);
+            break;
+        case 'multicast':
+            item.multicast += potion.effectValue;
+            break;
+        case 'healboost':
+            item.healOnTrigger = (item.healOnTrigger || 0) + potion.effectValue;
+            break;
+        case 'morph':
+            var sameRarity = ITEMS.filter(function(i) { return i.rarity === item.rarity && i.id !== item.id; });
+            if (sameRarity.length > 0) {
+                var newItem = pick(sameRarity);
+                var morphed = createShopItem(newItem);
+                morphed.stars = item.stars;
+                state.tower[towerIndex] = morphed;
+            }
+            break;
+        case 'upgrade':
+            item.stars = Math.min(3, item.stars + 1);
+            item.damage = Math.floor(item.damage * 1.25);
+            item.multicast += 1;
+            break;
+    }
+
+    state.inventory.splice(potionIndex, 1);
+    return true;
+}
+
+function addPotionToInventory(potionId) {
+    var template = POTIONS.find(function(p) { return p.id === potionId; });
+    if (template) {
+        state.inventory.push({ ...template, isPotion: true, uid: crypto.randomUUID() });
+    }
+}
+
+function addRandomVialToInventory() {
+    var vials = POTIONS.filter(function(p) { return p.id !== 'phantom_brew' && p.id !== 'crownforge_brew'; });
+    var template = pick(vials);
+    state.inventory.push({ ...template, isPotion: true, uid: crypto.randomUUID() });
 }
 
 function levelUp() {
@@ -545,6 +645,110 @@ function fireItem(item, idx, tower, combat, side) {
     if (ab.includes('permanently gain') && ab.includes('crit')) {
         const match = item.ability.match(/\+(\d+)%?\s*crit/i);
         if (match) item.crit += parseInt(match[1]);
+    }
+
+    // === POTION-APPLIED ON-TRIGGER EFFECTS ===
+    // Heal on trigger (from potions)
+    if (item.healOnTrigger && item.healOnTrigger > 0) {
+        if (isPlayer) combat.playerHP = Math.min(combat.playerMaxHP, combat.playerHP + item.healOnTrigger);
+        else combat.enemyHP = Math.min(combat.enemyMaxHP, combat.enemyHP + item.healOnTrigger);
+        combat.log.push(`[${side}] ${item.name} heals ${item.healOnTrigger} (potion buff)`);
+    }
+    // Poison on trigger (from potions)
+    if (item.poisonOnTrigger && item.poisonOnTrigger > 0) {
+        targetDebuffs.poison += item.poisonOnTrigger;
+        combat.log.push(`[${side}] ${item.name} applies ${item.poisonOnTrigger} poison (potion buff)`);
+    }
+    // Burn on trigger (from potions)
+    if (item.burnOnTrigger && item.burnOnTrigger > 0) {
+        targetDebuffs.burn += item.burnOnTrigger;
+        combat.log.push(`[${side}] ${item.name} applies ${item.burnOnTrigger} burn (potion buff)`);
+    }
+    // Shield on trigger (from potions)
+    if (item.shieldOnTrigger && item.shieldOnTrigger > 0) {
+        if (isPlayer) combat.playerShield += item.shieldOnTrigger;
+        else combat.enemyShield += item.shieldOnTrigger;
+        combat.log.push(`[${side}] ${item.name} grants ${item.shieldOnTrigger} shield (potion buff)`);
+    }
+
+    // === SPECIAL ITEM LOGIC ===
+    if (item.special && isPlayer) {
+        item._triggerCount = (item._triggerCount || 0) + 1;
+
+        switch (item.special) {
+            case 'generate_random_vial':
+                addRandomVialToInventory();
+                state.potionGenerationQueue.push('Random Vial');
+                combat.log.push(`[${side}] ${item.name} generated a random vial!`);
+                break;
+            case 'generate_phantom_brew':
+                if (item._triggerCount % 3 === 0) {
+                    addPotionToInventory('phantom_brew');
+                    state.potionGenerationQueue.push('Phantom Brew');
+                    combat.log.push(`[${side}] ${item.name} generated a Phantom Brew!`);
+                }
+                break;
+            case 'generate_health_vial':
+                addPotionToInventory('health_vial');
+                state.potionGenerationQueue.push('Health Vial');
+                combat.log.push(`[${side}] ${item.name} generated a Health Vial!`);
+                break;
+            case 'heal_trigger':
+                if (isPlayer) combat.playerHP = Math.min(combat.playerMaxHP, combat.playerHP + 15);
+                else combat.enemyHP = Math.min(combat.enemyMaxHP, combat.enemyHP + 15);
+                combat.log.push(`[${side}] ${item.name} heals 15 HP`);
+                break;
+            case 'mending_aura':
+                var mheal = 25 + (item._triggerCount - 1) * 2;
+                if (isPlayer) combat.playerHP = Math.min(combat.playerMaxHP, combat.playerHP + mheal);
+                else combat.enemyHP = Math.min(combat.enemyMaxHP, combat.enemyHP + mheal);
+                item.healOnTrigger = (item.healOnTrigger || 0) + 2;
+                combat.log.push(`[${side}] ${item.name} heals ${mheal} HP (+2 permanent heal)`);
+                break;
+            case 'heal_and_shield':
+                if (isPlayer) {
+                    combat.playerHP = Math.min(combat.playerMaxHP, combat.playerHP + 50);
+                    combat.playerShield += 5;
+                } else {
+                    combat.enemyHP = Math.min(combat.enemyMaxHP, combat.enemyHP + 50);
+                    combat.enemyShield += 5;
+                }
+                combat.log.push(`[${side}] ${item.name} heals 50 HP and grants 5 Shield`);
+                break;
+            case 'stack_damage':
+                item.damage += 1;
+                combat.log.push(`[${side}] ${item.name} gained +1 permanent damage (now ${item.damage})`);
+                break;
+            case 'stack_5_trigger':
+                if (item._triggerCount % 5 === 0) {
+                    item.damage += 8;
+                    item.crit += 5;
+                    combat.log.push(`[${side}] ${item.name} gained +8 dmg and +5% crit!`);
+                }
+                break;
+            case 'stack_multicast_4':
+                if (item._triggerCount % 4 === 0) {
+                    item.multicast += 1;
+                    combat.log.push(`[${side}] ${item.name} gained +1 multicast!`);
+                }
+                break;
+            case 'stack_debuff_damage':
+                var debuffCount = 0;
+                if (isPlayer) {
+                    debuffCount = (combat.enemyDebuffs.poison > 0 ? 1 : 0) + (combat.enemyDebuffs.bleed > 0 ? 1 : 0) + (combat.enemyDebuffs.burn > 0 ? 1 : 0) + (combat.enemyDebuffs.coreCrack > 0 ? 1 : 0);
+                } else {
+                    debuffCount = (combat.playerDebuffs.poison > 0 ? 1 : 0) + (combat.playerDebuffs.bleed > 0 ? 1 : 0) + (combat.playerDebuffs.burn > 0 ? 1 : 0) + (combat.playerDebuffs.coreCrack > 0 ? 1 : 0);
+                }
+                item.damage += debuffCount;
+                if (debuffCount > 0) combat.log.push(`[${side}] ${item.name} gained +${debuffCount} permanent dmg from debuffs`);
+                break;
+            case 'stack_multicast_3':
+                if (item._triggerCount % 3 === 0) {
+                    item.multicast += 1;
+                    combat.log.push(`[${side}] ${item.name} gained +1 multicast (every 3rd trigger)!`);
+                }
+                break;
+        }
     }
 }
 
