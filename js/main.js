@@ -205,18 +205,165 @@ function renderShop() {
     var grid = $('shop-items');
     grid.innerHTML = '';
     state.shop.forEach(function(item, idx) {
-        var card = renderItemCard(item, function() {
-            if (buyItem(idx)) {
-                renderShop();
-                renderTower();
-                updateHUD();
-            }
-        });
-        grid.appendChild(card);
+        if (item.isPotion) {
+            var card = renderPotionCard(item, function() {
+                if (buyPotion(idx)) {
+                    renderShop();
+                    renderTower();
+                    renderInventory();
+                    updateHUD();
+                }
+            }, true);
+            grid.appendChild(card);
+        } else {
+            var card = renderItemCard(item, function() {
+                if (buyItem(idx)) {
+                    renderShop();
+                    renderTower();
+                    updateHUD();
+                }
+            });
+            grid.appendChild(card);
+        }
     });
     $('btn-levelup').textContent = 'Level Up (' + getLevelUpCost() + 'g)';
     $('btn-levelup').disabled = state.gold < getLevelUpCost() || state.level >= 7;
     $('btn-refresh').textContent = state.freeRefresh ? 'Refresh (Free)' : 'Refresh (3g)';
+}
+
+// === POTION CARD RENDERING ===
+function renderPotionCard(potion, clickHandler, showCost) {
+    var card = document.createElement('div');
+    card.className = 'item-card potion-card';
+    card.style.borderColor = potion.color || '#aa44ff';
+    var costHtml = showCost ? '<span class="item-cost">' + potion.cost + 'g</span>' : '';
+    card.innerHTML =
+        costHtml +
+        '<div class="card-icon-area potion-icon-area" style="background:linear-gradient(180deg, ' + (potion.color || '#aa44ff') + '22, transparent)">' +
+            '<span class="potion-emoji">🧪</span>' +
+        '</div>' +
+        '<div class="card-body">' +
+            '<div class="item-name" style="color:' + (potion.color || '#aa44ff') + '">' + potion.name + '</div>' +
+            '<div class="item-pack-badge" style="color:' + (potion.color || '#aa44ff') + ';border-color:' + (potion.color || '#aa44ff') + '40">Potion</div>' +
+            '<div class="item-ability">' + potion.desc + '</div>' +
+        '</div>';
+    if (clickHandler) card.addEventListener('click', clickHandler);
+    return card;
+}
+
+// === INVENTORY RENDERING (Drag & Drop) ===
+function renderInventory() {
+    var grid = $('inventory-slots');
+    if (!grid) return;
+    grid.innerHTML = '';
+    if (state.inventory.length === 0) {
+        grid.innerHTML = '<div class="inventory-empty">No potions. Buy them from the shop!</div>';
+        return;
+    }
+    state.inventory.forEach(function(potion, idx) {
+        var card = document.createElement('div');
+        card.className = 'potion-card potion-inventory-card';
+        card.draggable = true;
+        card.setAttribute('data-potion-index', idx);
+        card.style.borderColor = potion.color || '#aa44ff';
+        card.innerHTML =
+            '<div class="potion-card-icon" style="background:' + (potion.color || '#aa44ff') + '22">' +
+                '<span class="potion-emoji">🧪</span>' +
+            '</div>' +
+            '<div class="potion-card-body">' +
+                '<div class="potion-card-name" style="color:' + (potion.color || '#aa44ff') + '">' + potion.name + '</div>' +
+                '<div class="potion-card-desc">' + potion.desc + '</div>' +
+            '</div>';
+
+        // Drag start
+        card.addEventListener('dragstart', function(e) {
+            e.dataTransfer.setData('text/plain', idx.toString());
+            e.dataTransfer.effectAllowed = 'move';
+            card.classList.add('dragging');
+            document.body.classList.add('potion-dragging');
+            // Highlight tower items as drop targets
+            highlightDropTargets(potion);
+        });
+        card.addEventListener('dragend', function(e) {
+            card.classList.remove('dragging');
+            document.body.classList.remove('potion-dragging');
+            clearDropTargets();
+        });
+        grid.appendChild(card);
+    });
+}
+
+function highlightDropTargets(potion) {
+    // Mark tower items as drop targets
+    var towerCards = document.querySelectorAll('#tower-slots .item-card');
+    towerCards.forEach(function(cardEl) {
+        cardEl.classList.add('tower-item-drop-target');
+    });
+    // If it's a health vial, highlight the HP area too
+    if (potion.effectType === 'maxhp') {
+        var hpTarget = $('hp-drop-target');
+        if (hpTarget) hpTarget.classList.add('tower-item-drop-target');
+    }
+}
+
+function clearDropTargets() {
+    var targets = document.querySelectorAll('.tower-item-drop-target');
+    targets.forEach(function(el) { el.classList.remove('tower-item-drop-target'); });
+}
+
+function setupTowerDropTargets() {
+    var grid = $('tower-slots');
+    if (!grid) return;
+    // Tower item drop
+    grid.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    });
+    grid.addEventListener('drop', function(e) {
+        e.preventDefault();
+        var potionIndex = parseInt(e.dataTransfer.getData('text/plain'));
+        if (isNaN(potionIndex)) return;
+        // Find which tower item was dropped on
+        var target = e.target.closest('.item-card');
+        if (!target) return;
+        var towerCards = Array.from(grid.querySelectorAll('.item-card'));
+        var towerIndex = towerCards.indexOf(target);
+        if (towerIndex < 0) return;
+        if (applyPotion(potionIndex, towerIndex)) {
+            showPotionAppliedEffect(target);
+            renderTower();
+            renderInventory();
+            renderShop();
+            updateHUD();
+        }
+    });
+
+    // HP drop target for Health Vials
+    var hpTarget = $('hp-drop-target');
+    if (hpTarget) {
+        hpTarget.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        });
+        hpTarget.addEventListener('drop', function(e) {
+            e.preventDefault();
+            var potionIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            if (isNaN(potionIndex)) return;
+            var potion = state.inventory[potionIndex];
+            if (potion && potion.effectType === 'maxhp') {
+                if (applyPotion(potionIndex, -1)) {
+                    showPotionAppliedEffect(hpTarget);
+                    renderInventory();
+                    updateHUD();
+                }
+            }
+        });
+    }
+}
+
+function showPotionAppliedEffect(el) {
+    el.classList.add('potion-applied');
+    setTimeout(function() { el.classList.remove('potion-applied'); }, 600);
 }
 
 
@@ -233,9 +380,33 @@ function renderTower() {
                         sellItem(idx);
                         renderTower();
                         renderShop();
+                        renderInventory();
                         updateHUD();
                     }
                 }, false);
+                // Enable drop target on each tower card
+                card.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    card.classList.add('tower-item-drop-target');
+                });
+                card.addEventListener('dragleave', function(e) {
+                    card.classList.remove('tower-item-drop-target');
+                });
+                card.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    card.classList.remove('tower-item-drop-target');
+                    var potionIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                    if (isNaN(potionIndex)) return;
+                    if (applyPotion(potionIndex, idx)) {
+                        showPotionAppliedEffect(card);
+                        renderTower();
+                        renderInventory();
+                        renderShop();
+                        updateHUD();
+                    }
+                });
                 grid.appendChild(card);
             })(i, item);
         } else {
@@ -461,6 +632,13 @@ function endCombat(combat) {
         $('result-title').style.color = '#ff4444';
         $('result-detail').textContent = 'You lost ' + heartsLost + ' heart(s). Hearts remaining: ' + state.hearts;
     }
+    // Show potion generation notifications
+    if (state.potionGenerationQueue.length > 0) {
+        var potionMsg = 'Potions generated: ' + state.potionGenerationQueue.join(', ');
+        $('result-detail').textContent += '\n' + potionMsg;
+        showPotionGeneratedNotification(state.potionGenerationQueue);
+        state.potionGenerationQueue = [];
+    }
     updateHUD();
 
     if (state.wins >= 10) {
@@ -468,6 +646,21 @@ function endCombat(combat) {
     } else if (state.hearts <= 0) {
         setTimeout(function() { showGameOver(false); }, 500);
     }
+}
+
+function showPotionGeneratedNotification(potions) {
+    var container = $('damage-numbers');
+    potions.forEach(function(name, i) {
+        setTimeout(function() {
+            var el = document.createElement('div');
+            el.className = 'potion-generated';
+            el.textContent = '+' + name + '!';
+            el.style.left = (40 + Math.random() * 20) + '%';
+            el.style.top = (30 + i * 8) + '%';
+            container.appendChild(el);
+            setTimeout(function() { el.remove(); }, 2000);
+        }, i * 300);
+    });
 }
 
 function showGameOver(won) {
@@ -497,12 +690,14 @@ function nextDay() {
     if (encounter) {
         renderShop();
         renderTower();
+        renderInventory();
         showPhase('shop');
         state._pendingEncounter = encounter;
     } else {
         state._pendingEncounter = null;
         renderShop();
         renderTower();
+        renderInventory();
         showPhase('shop');
     }
 }
@@ -575,6 +770,8 @@ function init() {
         generateShop();
         renderShop();
         renderTower();
+        renderInventory();
+        setupTowerDropTargets();
         updateHUD();
         showPhase('shop');
     });
