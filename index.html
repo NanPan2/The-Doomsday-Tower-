@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Doomsday Tower</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Title Screen -->
+        <div id="screen-title" class="screen active">
+            <div class="title-container">
+                <h1 class="game-title">THE DOOMSDAY TOWER</h1>
+                <p class="subtitle">A synergy-driven autobattler set in the world of Aleria</p>
+                <div class="menu-buttons">
+                    <button id="btn-casual" class="btn btn-primary">Casual Mode</button>
+                    <button id="btn-ranked" class="btn btn-ranked">Ranked Mode</button>
+                </div>
+                <p class="flavor-text">"The Doomsday doesn't care how organized you are."</p>
+            </div>
+        </div>
+
+        <!-- Perk Selection Screen -->
+        <div id="screen-perks" class="screen">
+            <h2>Choose Your Perks</h2>
+            <p class="perk-instructions">Select up to 3 perks for this run</p>
+            <div id="perk-list" class="perk-grid"></div>
+            <button id="btn-start-run" class="btn btn-primary">Begin Run</button>
+        </div>
+
+        <!-- Main Game Screen -->
+        <div id="screen-game" class="screen">
+            <!-- Top HUD -->
+            <div id="hud">
+                <div class="hud-left">
+                    <span id="hud-day" class="hud-item">Day 1</span>
+                    <span id="hud-wins" class="hud-item">Wins: 0/10</span>
+                </div>
+                <div class="hud-center">
+                    <span id="hud-hearts" class="hud-item hearts"></span>
+                </div>
+                <div class="hud-right">
+                    <span id="hud-gold" class="hud-item">Gold: 55</span>
+                    <span id="hud-level" class="hud-item">Level: 1</span>
+                </div>
+            </div>
+
+            <!-- Shop Phase -->
+            <div id="phase-shop" class="phase">
+                <div class="shop-header">
+                    <h2>Shop</h2>
+                    <div class="shop-actions">
+                        <button id="btn-refresh" class="btn btn-small">Refresh (3g)</button>
+                        <button id="btn-freeze" class="btn btn-small">Freeze Shop</button>
+                        <button id="btn-levelup" class="btn btn-small">Level Up</button>
+                    </div>
+                </div>
+                <div id="shop-items" class="shop-grid"></div>
+                <div class="tower-section">
+                    <h3>Your Tower</h3>
+                    <div id="tower-slots" class="tower-grid"></div>
+                </div>
+                <button id="btn-ready" class="btn btn-primary btn-ready">Ready for Combat</button>
+            </div>
+
+            <!-- Encounter Phase -->
+            <div id="phase-encounter" class="phase hidden">
+                <div class="encounter-container">
+                    <div id="encounter-portrait" class="encounter-portrait"></div>
+                    <h2 id="encounter-name"></h2>
+                    <p id="encounter-flavor"></p>
+                    <div id="encounter-choices" class="encounter-choices"></div>
+                </div>
+            </div>
+
+            <!-- Combat Phase -->
+            <div id="phase-combat" class="phase hidden">
+                <div class="combat-arena">
+                    <div class="combat-side combat-player">
+                        <h3>Your Tower</h3>
+                        <div class="hp-bar-container">
+                            <div id="player-hp-bar" class="hp-bar"></div>
+                            <span id="player-hp-text" class="hp-text"></span>
+                        </div>
+                        <div id="player-tower-display" class="tower-combat-display"></div>
+                    </div>
+                    <div class="combat-vs">VS</div>
+                    <div class="combat-side combat-enemy">
+                        <h3>Enemy Tower</h3>
+                        <div class="hp-bar-container">
+                            <div id="enemy-hp-bar" class="hp-bar enemy"></div>
+                            <span id="enemy-hp-text" class="hp-text"></span>
+                        </div>
+                        <div id="enemy-tower-display" class="tower-combat-display"></div>
+                    </div>
+                </div>
+                <div id="combat-log" class="combat-log"></div>
+                <button id="btn-skip-combat" class="btn btn-small">Skip</button>
+            </div>
+
+            <!-- Combat Result -->
+            <div id="phase-result" class="phase hidden">
+                <div class="result-container">
+                    <h2 id="result-title"></h2>
+                    <p id="result-detail"></p>
+                    <button id="btn-next-day" class="btn btn-primary">Next Day</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="screen-gameover" class="screen">
+            <div class="gameover-container">
+                <h1 id="gameover-title"></h1>
+                <p id="gameover-detail"></p>
+                <div id="gameover-stats"></div>
+                <button id="btn-restart" class="btn btn-primary">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Item Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
