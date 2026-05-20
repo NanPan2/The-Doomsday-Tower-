@@ -1,5 +1,5 @@
 // === PACKS ===
-export const PACKS = {
+const PACKS = {
     mana: { name: 'Mana Pack', color: '#6644ff', desc: 'Spells, cores, mana flow' },
     doomsday: { name: 'Doomsday Pack', color: '#cc2200', desc: 'Heavy weapons, bleed/poison' },
     lostmagic: { name: 'Lost Magic Pack', color: '#00ccaa', desc: 'Relics, ancient-forged' },
@@ -10,10 +10,10 @@ export const PACKS = {
 };
 
 // === TAGS ===
-export const TAGS = ['Weapon','Bow','Dagger','Spell','Relic','Skill','Skyspine'];
+const TAGS = ['Weapon','Bow','Dagger','Spell','Relic','Skill','Skyspine'];
 
 // === RARITIES ===
-export const RARITIES = {
+const RARITIES = {
     common: { name: 'Common', color: '#aaaacc', weight: 60 },
     rare: { name: 'Rare', color: '#4488ff', weight: 25 },
     epic: { name: 'Epic', color: '#aa44ff', weight: 10 },
@@ -26,7 +26,7 @@ export const RARITIES = {
 
 
 // === ITEMS DATABASE ===
-export const ITEMS = [
+const ITEMS = [
     // --- COMMON ITEMS ---
     { id: 'voidspike', name: 'Voidspike', rarity: 'common', damage: 18, cooldown: 2.7, crit: 0, multicast: 1, tags: ['Weapon'], pack: 'mana', cost: 25, ability: 'On trigger: Gain +2 bonus damage per debuff on enemy.' },
     { id: 'iron_sword', name: 'Iron Sword', rarity: 'common', damage: 22, cooldown: 3.0, crit: 10, multicast: 1, tags: ['Weapon'], pack: 'doomsday', cost: 20, ability: 'On trigger: Deal +5 damage if enemy has Bleed.' },
@@ -82,7 +82,7 @@ export const ITEMS = [
 
 
 // === PERKS ===
-export const PERKS = [
+const PERKS = [
     { id: 'heros_core', name: "Hero's Core", desc: 'Take 1 less heart damage on losses during Days 1-4.' },
     { id: 'treasure', name: 'Treasure', desc: 'Gain a free Epic chest when you reach Level 5.' },
     { id: 'expanded_stock', name: 'Expanded Stock', desc: 'See 9 items in each shop instead of 7.' },
@@ -93,7 +93,7 @@ export const PERKS = [
 ];
 
 // === ENCOUNTERS ===
-export const ENCOUNTERS = [
+const ENCOUNTERS = [
     { day: 3, npcs: [
         { name: 'Wandering Merchant', icon: '🧳', flavor: 'A weary traveler offers rare goods.',
           choices: [
@@ -155,7 +155,7 @@ export const ENCOUNTERS = [
 ];
 
 // === LEVEL THRESHOLDS FOR RARITY ACCESS ===
-export const LEVEL_RARITY_ACCESS = {
+const LEVEL_RARITY_ACCESS = {
     1: { common: 80, rare: 18, epic: 2, legendary: 0, relic: 0, cursed: 0 },
     2: { common: 65, rare: 25, epic: 8, legendary: 2, relic: 0, cursed: 0 },
     3: { common: 50, rare: 30, epic: 13, legendary: 5, relic: 1, cursed: 1 },

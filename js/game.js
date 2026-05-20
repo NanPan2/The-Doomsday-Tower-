@@ -1,7 +1,6 @@
-import { ITEMS, PERKS, ENCOUNTERS, LEVEL_RARITY_ACCESS, PACKS } from './data.js';
 
 // === GAME STATE ===
-export const state = {
+const state = {
     mode: 'casual',
     day: 1,
     wins: 0,
@@ -21,7 +20,7 @@ export const state = {
     phase: 'shop',
 };
 
-export function resetState() {
+function resetState() {
     state.day = 1;
     state.wins = 0;
     state.hearts = 10;
@@ -44,7 +43,7 @@ function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + m
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 // === SHOP GENERATION ===
-export function generateShop() {
+function generateShop() {
     if (state.shopFrozen && state.shop.length > 0) {
         state.shopFrozen = false;
         return;
@@ -77,7 +76,7 @@ function createShopItem(template) {
     return { ...template, stars: 0, frozen: false, uid: crypto.randomUUID() };
 }
 
-export function refreshShop() {
+function refreshShop() {
     const cost = state.freeRefresh ? 0 : 3;
     if (state.gold < cost) return false;
     state.gold -= cost;
@@ -88,14 +87,14 @@ export function refreshShop() {
     return true;
 }
 
-export function freezeShop() {
+function freezeShop() {
     state.shopFrozen = !state.shopFrozen;
     state.shop.forEach(i => i.frozen = state.shopFrozen);
 }
 
 
 // === BUYING & TOWER ===
-export function buyItem(shopIndex) {
+function buyItem(shopIndex) {
     const item = state.shop[shopIndex];
     if (!item || state.gold < item.cost) return false;
     if (state.tower.length >= state.towerMaxSlots) return false;
@@ -105,7 +104,7 @@ export function buyItem(shopIndex) {
     return true;
 }
 
-export function sellItem(towerIndex) {
+function sellItem(towerIndex) {
     const item = state.tower[towerIndex];
     if (!item) return false;
     const refund = Math.floor(item.cost * 0.5);
@@ -114,7 +113,7 @@ export function sellItem(towerIndex) {
     return refund;
 }
 
-export function levelUp() {
+function levelUp() {
     const cost = 4 * (state.level - 1) + 48;
     if (state.gold < cost || state.level >= 7) return false;
     state.gold -= cost;
@@ -130,18 +129,18 @@ export function levelUp() {
     return true;
 }
 
-export function getLevelUpCost() {
+function getLevelUpCost() {
     return 4 * (state.level - 1) + 48;
 }
 
 // === DAY PROGRESSION ===
-export function startNewDay() {
+function startNewDay() {
     state.day++;
     state.gold += state.income;
     generateShop();
 }
 
-export function getHeartsLost() {
+function getHeartsLost() {
     let loss;
     if (state.day <= 2) loss = 1;
     else if (state.day <= 4) loss = 2;
@@ -154,12 +153,12 @@ export function getHeartsLost() {
 }
 
 // === ENCOUNTER LOGIC ===
-export function getEncounterForDay(day) {
+function getEncounterForDay(day) {
     return ENCOUNTERS.find(e => e.day === day);
 }
 
 
-export function applyEncounterEffect(effect) {
+function applyEncounterEffect(effect) {
     switch (effect) {
         case 'giveRandomRare': {
             const rares = ITEMS.filter(i => i.rarity === 'rare');
@@ -256,7 +255,7 @@ export function applyEncounterEffect(effect) {
 
 
 // === AI OPPONENT GENERATION ===
-export function generateOpponent() {
+function generateOpponent() {
     const level = Math.min(state.level + rand(-1, 1), 7);
     const effectiveLevel = Math.max(1, level);
     const rarityTable = LEVEL_RARITY_ACCESS[effectiveLevel];
@@ -284,7 +283,7 @@ export function generateOpponent() {
 }
 
 // === COMBAT ENGINE ===
-export function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
+function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
     const baseHP = 1000 + state.day * 100 + state.permanentBonuses.bonusHP;
     const combat = {
         playerHP: baseHP,
@@ -573,4 +572,3 @@ function applyDots(combat) {
     }
 }
 
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }

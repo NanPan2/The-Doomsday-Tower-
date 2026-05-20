@@ -1,11 +1,3 @@
-import { PERKS, PACKS } from './data.js';
-import {
-    state, resetState, generateShop, refreshShop, freezeShop,
-    buyItem, sellItem, levelUp, getLevelUpCost, startNewDay,
-    getHeartsLost, getEncounterForDay, applyEncounterEffect,
-    generateOpponent, simulateCombat
-} from './game.js';
-
 // === DOM REFS ===
 const $ = id => document.getElementById(id);
 
