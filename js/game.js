@@ -845,3 +845,140 @@ function enterEndlessMode() {
     state.hearts = 5;
     state.maxHearts = 5;
 }
+
+
+
+// === SAVE / LOAD SYSTEM ===
+var SAVE_STORAGE_KEY = 'doomsday_tower_saves';
+var SAVE_SLOT_KEYS = ['slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6'];
+var AUTOSAVE_KEY = 'autosave';
+
+// Read all saves from localStorage. Returns an object keyed by slot key.
+function getAllSaves() {
+    try {
+        var raw = localStorage.getItem(SAVE_STORAGE_KEY);
+        if (!raw) return {};
+        var parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+// Internal: write the saves object back to localStorage. Returns true on success.
+function _writeAllSaves(saves) {
+    try {
+        localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(saves));
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Serialize a deep copy of the current state.
+function _snapshotState() {
+    // Strip transient runtime-only properties before serializing.
+    // _pendingEncounter is part of state and is preserved.
+    var clone = {};
+    for (var k in state) {
+        if (!Object.prototype.hasOwnProperty.call(state, k)) continue;
+        // Skip private keys we know are transient
+        if (k === '_lastFusion') continue;
+        clone[k] = state[k];
+    }
+    return JSON.parse(JSON.stringify(clone));
+}
+
+// Save the current state into the given slot with the given name.
+function saveGame(slotKey, saveName) {
+    if (!slotKey) return false;
+    var saves = getAllSaves();
+    var existing = saves[slotKey];
+    var name = (saveName && String(saveName).trim()) || (existing && existing.name) || _defaultSlotName(slotKey);
+    saves[slotKey] = {
+        name: name,
+        timestamp: Date.now(),
+        state: _snapshotState()
+    };
+    return _writeAllSaves(saves);
+}
+
+// Auto-save into the dedicated autosave slot.
+function autoSaveGame() {
+    var saves = getAllSaves();
+    saves[AUTOSAVE_KEY] = {
+        name: 'Autosave (Day ' + state.day + ')',
+        timestamp: Date.now(),
+        state: _snapshotState(),
+        isAutosave: true
+    };
+    return _writeAllSaves(saves);
+}
+
+// Load the saved state from the given slot. Mutates `state` in place.
+function loadGame(slotKey) {
+    var saves = getAllSaves();
+    var save = saves[slotKey];
+    if (!save || !save.state) return false;
+    var loaded = JSON.parse(JSON.stringify(save.state));
+    // Remove keys from current state that aren't in the loaded state
+    for (var k in state) {
+        if (Object.prototype.hasOwnProperty.call(state, k) &&
+            !Object.prototype.hasOwnProperty.call(loaded, k)) {
+            delete state[k];
+        }
+    }
+    // Copy loaded values over
+    Object.assign(state, loaded);
+    // Reset transient runtime keys
+    delete state._lastFusion;
+    return true;
+}
+
+// Delete a save slot.
+function deleteSave(slotKey) {
+    var saves = getAllSaves();
+    if (Object.prototype.hasOwnProperty.call(saves, slotKey)) {
+        delete saves[slotKey];
+        return _writeAllSaves(saves);
+    }
+    return false;
+}
+
+// Build a brief metadata string for UI display.
+function getSaveMetadata(saveData) {
+    if (!saveData || !saveData.state) return 'Empty Slot';
+    var s = saveData.state;
+    var modeName = s.mode ? (s.mode.charAt(0).toUpperCase() + s.mode.slice(1)) : 'Casual';
+    var winsPart = s.endless
+        ? ('Score ' + (s.endlessDay || 0))
+        : ('Wins ' + (s.wins || 0) + '/10');
+    var heartsPart = (s.hearts != null ? s.hearts : '?') + '/' + (s.maxHearts != null ? s.maxHearts : '?') + ' HP';
+    var endlessTag = s.endless ? ' • Endless' : '';
+    return 'Day ' + (s.day || 1) + ' • Lv.' + (s.level || 1) + ' • ' + winsPart + ' • ' + modeName + endlessTag + ' • ' + heartsPart;
+}
+
+// Format a JS timestamp as a readable date string.
+function formatSaveTimestamp(ts) {
+    if (!ts) return '';
+    try {
+        var d = new Date(ts);
+        // e.g. "Nov 21, 2026, 3:45 PM"
+        return d.toLocaleString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return '';
+    }
+}
+
+function _defaultSlotName(slotKey) {
+    if (slotKey === AUTOSAVE_KEY) return 'Autosave';
+    var m = /^slot(\d+)$/.exec(slotKey);
+    if (m) return 'Save ' + m[1];
+    return slotKey;
+}
