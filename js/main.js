@@ -864,6 +864,14 @@ function init() {
         renderPerks();
         showScreen('perks');
     });
+    $('btn-endless').addEventListener('click', function() {
+        state.mode = 'endless';
+        resetState();
+        state.endless = true;
+        state.hearts = 5;
+        renderPerks();
+        showScreen('perks');
+    });
 
     // Perk screen
     $('btn-start-run').addEventListener('click', function() {
