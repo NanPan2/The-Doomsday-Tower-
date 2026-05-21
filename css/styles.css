@@ -223,6 +223,20 @@ body {
 .btn-ranked:hover {
     box-shadow: 0 0 30px var(--gold-glow), 0 4px 12px rgba(0,0,0,0.5);
 }
+.btn-endless {
+    background: linear-gradient(180deg, #cc2200 0%, #881100 100%);
+    border-color: #ff4400;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(204, 34, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+    animation: endlessBtnPulse 2s ease-in-out infinite alternate;
+}
+.btn-endless:hover {
+    box-shadow: 0 0 30px rgba(255, 68, 0, 0.6), 0 4px 12px rgba(0,0,0,0.5);
+}
+@keyframes endlessBtnPulse {
+    0% { box-shadow: 0 0 10px rgba(204, 34, 0, 0.3); }
+    100% { box-shadow: 0 0 20px rgba(255, 68, 0, 0.5), 0 0 4px rgba(255, 68, 0, 0.3); }
+}
 .btn-small {
     padding: 0.5rem 1rem;
     font-size: 0.8rem;
@@ -1399,4 +1413,263 @@ body.potion-dragging .tower-grid {
 }
 .endless-choice .btn {
     margin: 0 0.5rem;
+}
+
+
+
+/* === HUD MENU BUTTON === */
+.hud-menu-btn {
+    margin-left: 0.5rem;
+    width: 38px;
+    height: 38px;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    background: linear-gradient(180deg, #222238 0%, #16162a 100%);
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+.hud-menu-btn:hover {
+    color: var(--gold);
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 12px var(--gold-glow);
+    transform: rotate(35deg);
+}
+.hud-menu-btn:active {
+    transform: rotate(15deg) scale(0.95);
+}
+
+/* === MODAL OVERLAY === */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    background: radial-gradient(ellipse at center, rgba(8, 8, 16, 0.78) 0%, rgba(0, 0, 0, 0.92) 100%);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    animation: modalFadeIn 0.18s ease-out;
+}
+.modal-overlay.hidden {
+    display: none;
+}
+@keyframes modalFadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
+.modal-content {
+    background: linear-gradient(160deg, #16162a 0%, #0e0e1c 60%, #0a0a14 100%);
+    border: 2px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 2rem 2rem 1.5rem;
+    width: 100%;
+    max-width: 400px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 215, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    position: relative;
+    animation: modalSlideIn 0.22s ease-out;
+}
+.modal-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, var(--gold-dim) 30%, var(--gold) 50%, var(--gold-dim) 70%, transparent 100%);
+    opacity: 0.6;
+    border-radius: 10px 10px 0 0;
+}
+.modal-wide {
+    max-width: 720px;
+}
+@keyframes modalSlideIn {
+    0% { transform: translateY(-12px) scale(0.97); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.modal-title {
+    text-align: center;
+    color: var(--gold);
+    font-family: var(--font-display);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    text-shadow: 0 0 12px var(--gold-glow);
+    margin-bottom: 0.4rem;
+    font-size: 1.5rem;
+}
+.modal-subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 1.2rem;
+    font-style: italic;
+}
+.modal-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin-top: 1.2rem;
+}
+.modal-buttons-row {
+    flex-direction: row;
+    justify-content: center;
+}
+.modal-buttons .btn {
+    width: 100%;
+}
+.modal-buttons-row .btn {
+    width: auto;
+    min-width: 120px;
+}
+
+/* === SAVE / LOAD SLOT CARDS === */
+.slots-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin: 1rem 0 0.5rem;
+    padding-right: 0.25rem;
+}
+.slot-card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 0.4rem 0.8rem;
+    align-items: center;
+    background: linear-gradient(135deg, #14142a 0%, #0e0e1c 100%);
+    border: 2px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 0.75rem 0.9rem;
+    transition: all 0.2s ease;
+    position: relative;
+}
+.slot-card:hover {
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.12);
+}
+.slot-card.empty {
+    background: linear-gradient(135deg, #0e0e18 0%, #0a0a14 100%);
+    border-style: dashed;
+    opacity: 0.78;
+}
+.slot-card.autosave {
+    border-color: var(--rarity-epic);
+    box-shadow: 0 0 10px var(--rarity-epic-glow);
+}
+.slot-card.autosave .slot-name-label {
+    color: var(--rarity-epic);
+}
+.slot-name-input {
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 0.4rem 0.6rem;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    width: 100%;
+    transition: all 0.15s ease;
+}
+.slot-name-input:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 8px var(--gold-glow);
+    background: rgba(0, 0, 0, 0.6);
+}
+.slot-name-input:disabled {
+    color: var(--text-muted);
+    background: transparent;
+    border-color: transparent;
+    font-style: italic;
+}
+.slot-name-label {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid transparent;
+}
+.slot-meta {
+    grid-column: 1 / 2;
+    grid-row: 2;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+    line-height: 1.5;
+    padding-left: 0.6rem;
+}
+.slot-meta.empty-meta {
+    color: var(--text-muted);
+    font-style: italic;
+    font-family: var(--font-body);
+}
+.slot-meta-time {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    margin-top: 0.1rem;
+}
+.slot-actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-self: stretch;
+    justify-content: center;
+}
+.slot-actions .btn {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.7rem;
+    min-width: 84px;
+    letter-spacing: 1px;
+}
+.btn-slot-save {
+    background: linear-gradient(180deg, #228844 0%, #115522 100%);
+    border-color: #33aa55;
+    box-shadow: 0 0 8px rgba(34, 136, 68, 0.3);
+}
+.btn-slot-save:hover {
+    box-shadow: 0 0 14px rgba(34, 170, 68, 0.5);
+}
+.btn-slot-load {
+    background: linear-gradient(180deg, #3355aa 0%, #223377 100%);
+    border-color: #4466bb;
+    box-shadow: 0 0 8px rgba(51, 85, 170, 0.3);
+}
+.btn-slot-load:hover {
+    box-shadow: 0 0 14px rgba(68, 102, 204, 0.5);
+}
+.btn-slot-delete {
+    background: linear-gradient(180deg, #6a2222 0%, #3a1111 100%);
+    border-color: #aa3333;
+    color: #ffcccc;
+}
+.btn-slot-delete:hover {
+    box-shadow: 0 0 12px rgba(204, 51, 51, 0.45);
+    border-color: #cc4444;
+}
+
+/* Modal responsive */
+@media (max-width: 640px) {
+    .modal-content { padding: 1.25rem 1rem; }
+    .modal-wide { max-width: 100%; }
+    .slot-card { grid-template-columns: 1fr; }
+    .slot-actions { grid-column: 1; grid-row: auto; flex-direction: row; }
+    .slot-actions .btn { flex: 1; }
+    .slot-meta { padding-left: 0.2rem; }
 }

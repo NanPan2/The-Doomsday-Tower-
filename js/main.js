@@ -804,6 +804,280 @@ function nextDay() {
         renderInventory();
         showPhase('shop');
     }
+    // Auto-save at the start of each day
+    try { autoSaveGame(); } catch (e) { /* ignore quota errors */ }
+}
+
+
+// === IN-GAME MENU ===
+var _menuPausedCombat = false;
+
+function openMenu() {
+    // Pause active combat while the menu is up
+    if (combatInterval) {
+        clearInterval(combatInterval);
+        combatInterval = null;
+        _menuPausedCombat = true;
+    }
+    $('game-menu').classList.remove('hidden');
+}
+
+function closeMenu() {
+    $('game-menu').classList.add('hidden');
+    if (_menuPausedCombat && currentCombatObj && !currentCombatObj.done) {
+        combatInterval = setInterval(function() {
+            currentCombatTick();
+            if (currentCombatObj.done && combatInterval) {
+                clearInterval(combatInterval);
+                combatInterval = null;
+            }
+        }, (currentTICK * 1000) / combatSpeed);
+    }
+    _menuPausedCombat = false;
+}
+
+
+// === SAVE / LOAD UI ===
+var _slotsMode = 'save'; // 'save' | 'load'
+var _slotsLoadFromTitle = false;
+
+function openSlotsModal(mode, fromTitle) {
+    _slotsMode = (mode === 'load') ? 'load' : 'save';
+    _slotsLoadFromTitle = !!fromTitle;
+    $('slots-title').textContent = (_slotsMode === 'save') ? 'Save Game' : 'Load Game';
+    var sub = $('slots-subtitle');
+    if (_slotsMode === 'save') {
+        sub.textContent = 'Choose a slot to save your current run.';
+    } else {
+        sub.textContent = 'Pick a save to continue your journey.';
+    }
+    renderSlots();
+    $('slots-modal').classList.remove('hidden');
+    // Hide the menu while the slots picker is open
+    $('game-menu').classList.add('hidden');
+}
+
+function closeSlotsModal() {
+    $('slots-modal').classList.add('hidden');
+    if (_slotsLoadFromTitle) {
+        _slotsLoadFromTitle = false;
+        // Returning to title without loading: leave the title screen as it was.
+        return;
+    }
+    // Otherwise, return to the in-game menu (only if we're on the game screen and a run is active)
+    if (screens.game.classList.contains('active')) {
+        $('game-menu').classList.remove('hidden');
+    }
+}
+
+function renderSlots() {
+    var list = $('slots-list');
+    list.innerHTML = '';
+    var saves = getAllSaves();
+
+    // Build the list of slots to display
+    var slotKeys = SAVE_SLOT_KEYS.slice();
+    // In load mode, show the autosave at the top if it exists
+    var showAutosaveAtTop = (_slotsMode === 'load') && !!saves[AUTOSAVE_KEY];
+    if (showAutosaveAtTop) {
+        slotKeys.unshift(AUTOSAVE_KEY);
+    }
+
+    slotKeys.forEach(function(slotKey) {
+        var save = saves[slotKey];
+        list.appendChild(renderSlotCard(slotKey, save));
+    });
+}
+
+function renderSlotCard(slotKey, save) {
+    var card = document.createElement('div');
+    card.className = 'slot-card';
+    var hasData = !!(save && save.state);
+    var isAutosave = slotKey === AUTOSAVE_KEY;
+    if (!hasData) card.classList.add('empty');
+    if (isAutosave) card.classList.add('autosave');
+
+    // --- Name area ---
+    var nameWrap = document.createElement('div');
+    nameWrap.style.gridColumn = '1';
+    nameWrap.style.gridRow = '1';
+
+    var defaultName = (save && save.name) || _defaultSlotName(slotKey);
+
+    if (_slotsMode === 'save' && !isAutosave) {
+        // Editable name input
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'slot-name-input';
+        input.value = defaultName;
+        input.maxLength = 40;
+        input.setAttribute('data-slot-key', slotKey);
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                onSaveSlot(slotKey, input.value);
+            }
+        });
+        nameWrap.appendChild(input);
+    } else {
+        // Read-only label (load mode, or autosave)
+        var label = document.createElement('div');
+        label.className = 'slot-name-label';
+        label.textContent = defaultName;
+        nameWrap.appendChild(label);
+    }
+    card.appendChild(nameWrap);
+
+    // --- Meta ---
+    var meta = document.createElement('div');
+    meta.className = 'slot-meta';
+    if (hasData) {
+        var metaText = getSaveMetadata(save);
+        var ts = formatSaveTimestamp(save.timestamp);
+        meta.innerHTML = '<div>' + metaText + '</div>' +
+            (ts ? '<div class="slot-meta-time">Saved ' + ts + '</div>' : '');
+    } else {
+        meta.classList.add('empty-meta');
+        meta.textContent = 'Empty Slot';
+    }
+    card.appendChild(meta);
+
+    // --- Actions ---
+    var actions = document.createElement('div');
+    actions.className = 'slot-actions';
+
+    if (_slotsMode === 'save') {
+        if (!isAutosave) {
+            var saveBtn = document.createElement('button');
+            saveBtn.className = 'btn btn-small btn-slot-save';
+            saveBtn.textContent = hasData ? 'Overwrite' : 'Save';
+            saveBtn.addEventListener('click', function() {
+                var inp = card.querySelector('.slot-name-input');
+                var name = inp ? inp.value : defaultName;
+                onSaveSlot(slotKey, name);
+            });
+            actions.appendChild(saveBtn);
+        }
+    } else {
+        // Load mode
+        var loadBtn = document.createElement('button');
+        loadBtn.className = 'btn btn-small btn-slot-load';
+        loadBtn.textContent = 'Load';
+        if (!hasData) {
+            loadBtn.disabled = true;
+            loadBtn.style.visibility = 'hidden';
+        } else {
+            loadBtn.addEventListener('click', function() {
+                onLoadSlot(slotKey);
+            });
+        }
+        actions.appendChild(loadBtn);
+    }
+
+    if (hasData) {
+        var delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-small btn-slot-delete';
+        delBtn.textContent = 'Delete';
+        delBtn.addEventListener('click', function() {
+            onDeleteSlot(slotKey);
+        });
+        actions.appendChild(delBtn);
+    }
+
+    card.appendChild(actions);
+    return card;
+}
+
+function onSaveSlot(slotKey, name) {
+    var ok = saveGame(slotKey, name);
+    if (!ok) {
+        alert('Could not save game. Storage might be full.');
+        return;
+    }
+    // Re-render to refresh metadata + timestamps
+    renderSlots();
+    flashSlotCard(slotKey, 'saved');
+}
+
+function onLoadSlot(slotKey) {
+    var saves = getAllSaves();
+    if (!saves[slotKey]) return;
+    if (!confirm('Load "' + (saves[slotKey].name || slotKey) + '"? Any unsaved progress will be lost.')) return;
+
+    // Clean up any active combat loop before swapping state
+    if (combatInterval) {
+        clearInterval(combatInterval);
+        combatInterval = null;
+    }
+    _menuPausedCombat = false;
+    currentCombatObj = null;
+    currentCombatTick = null;
+
+    var ok = loadGame(slotKey);
+    if (!ok) {
+        alert('Could not load this save.');
+        return;
+    }
+
+    // Make sure SVG icons are present (in case of fresh page load -> title -> load)
+    if (!svgIconsLoaded) {
+        loadSVGIcons();
+    }
+
+    // Close any open modals
+    $('slots-modal').classList.add('hidden');
+    $('game-menu').classList.add('hidden');
+
+    // Switch to the game screen and hydrate the UI
+    showScreen('game');
+    setupTowerDropTargets();
+    renderShop();
+    renderTower();
+    renderInventory();
+    updateHUD();
+
+    // Restore phase. Combat / result phases are transient -> reset to shop.
+    var savedPhase = state.phase;
+    if (savedPhase === 'combat' || savedPhase === 'result' || !savedPhase) {
+        savedPhase = 'shop';
+    }
+    if (savedPhase === 'encounter') {
+        if (state._pendingEncounter) {
+            renderEncounter(state._pendingEncounter, 0);
+        } else {
+            showPhase('shop');
+        }
+    } else {
+        showPhase(savedPhase);
+    }
+
+    _slotsLoadFromTitle = false;
+}
+
+function onDeleteSlot(slotKey) {
+    var saves = getAllSaves();
+    var save = saves[slotKey];
+    var displayName = (save && save.name) || _defaultSlotName(slotKey);
+    if (!confirm('Delete "' + displayName + '"? This cannot be undone.')) return;
+    deleteSave(slotKey);
+    renderSlots();
+}
+
+function flashSlotCard(slotKey, kind) {
+    var list = $('slots-list');
+    if (!list) return;
+    var cards = list.querySelectorAll('.slot-card');
+    cards.forEach(function(c) {
+        var inp = c.querySelector('.slot-name-input');
+        var key = inp && inp.getAttribute('data-slot-key');
+        var label = c.querySelector('.slot-name-label');
+        var labelText = label && label.textContent;
+        // Match either by input data-slot-key or default name fallback
+        if (key === slotKey || labelText === _defaultSlotName(slotKey)) {
+            c.classList.add('potion-applied');
+            setTimeout(function() { c.classList.remove('potion-applied'); }, 600);
+        }
+    });
 }
 
 // === READY FOR COMBAT ===
@@ -861,6 +1135,14 @@ function init() {
     $('btn-ranked').addEventListener('click', function() {
         state.mode = 'ranked';
         resetState();
+        renderPerks();
+        showScreen('perks');
+    });
+    $('btn-endless').addEventListener('click', function() {
+        state.mode = 'endless';
+        resetState();
+        state.endless = true;
+        state.hearts = 5;
         renderPerks();
         showScreen('perks');
     });
@@ -924,6 +1206,72 @@ function init() {
     $('btn-restart').addEventListener('click', function() {
         resetState();
         showScreen('title');
+    });
+
+    // === SAVE / LOAD: Title screen ===
+    $('btn-title-load').addEventListener('click', function() {
+        openSlotsModal('load', true);
+    });
+
+    // === SAVE / LOAD: HUD menu button ===
+    $('btn-menu').addEventListener('click', openMenu);
+
+    // === Game Menu actions ===
+    $('btn-resume').addEventListener('click', closeMenu);
+    $('btn-save-game').addEventListener('click', function() {
+        openSlotsModal('save', false);
+    });
+    $('btn-load-game').addEventListener('click', function() {
+        openSlotsModal('load', false);
+    });
+    $('btn-restart-run').addEventListener('click', function() {
+        if (!confirm('Restart this run? Your current progress will be lost.')) return;
+        var keepMode = state.mode || 'casual';
+        // Stop any combat in progress
+        if (combatInterval) { clearInterval(combatInterval); combatInterval = null; }
+        _menuPausedCombat = false;
+        resetState();
+        state.mode = keepMode;
+        if (keepMode === 'endless') {
+            state.endless = true;
+            state.hearts = 5;
+            state.maxHearts = 5;
+        }
+        $('game-menu').classList.add('hidden');
+        renderPerks();
+        showScreen('perks');
+    });
+    $('btn-main-menu').addEventListener('click', function() {
+        if (!confirm('Return to the main menu? Any unsaved progress will be lost.')) return;
+        if (combatInterval) { clearInterval(combatInterval); combatInterval = null; }
+        _menuPausedCombat = false;
+        resetState();
+        $('game-menu').classList.add('hidden');
+        showScreen('title');
+    });
+
+    // === Slots modal back button ===
+    $('btn-slots-back').addEventListener('click', closeSlotsModal);
+
+    // Close modals when clicking the dim backdrop (but not when clicking the inner card)
+    $('game-menu').addEventListener('click', function(e) {
+        if (e.target === $('game-menu')) closeMenu();
+    });
+    $('slots-modal').addEventListener('click', function(e) {
+        if (e.target === $('slots-modal')) closeSlotsModal();
+    });
+
+    // ESC key closes the topmost modal
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        if (!$('slots-modal').classList.contains('hidden')) {
+            closeSlotsModal();
+        } else if (!$('game-menu').classList.contains('hidden')) {
+            closeMenu();
+        } else if (screens.game.classList.contains('active')) {
+            // Quick-open the menu while in game
+            openMenu();
+        }
     });
 }
 
