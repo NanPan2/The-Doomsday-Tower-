@@ -131,14 +131,29 @@ function showPhase(name) {
 // === HUD UPDATE ===
 function updateHUD() {
     $('hud-day').textContent = 'Day ' + state.day;
-    $('hud-wins').textContent = 'Wins: ' + state.wins + '/10';
+    if (state.endless) {
+        $('hud-wins').textContent = 'Score: ' + state.endlessDay;
+        $('hud-endless-badge').classList.remove('hidden');
+    } else {
+        $('hud-wins').textContent = 'Wins: ' + state.wins + '/10';
+        $('hud-endless-badge').classList.add('hidden');
+    }
     $('hud-gold').textContent = 'Gold: ' + state.gold;
-    $('hud-level').textContent = 'Level: ' + state.level;
+    $('hud-level').textContent = 'Lv.' + state.level;
     var hearts = '';
     for (var i = 0; i < state.maxHearts; i++) {
         hearts += i < state.hearts ? '❤️' : '🖤';
     }
     $('hud-hearts').textContent = hearts;
+    // XP bar
+    var xpNeeded = state.level < 7 ? XP_THRESHOLDS[state.level] : 0;
+    var xpPct = xpNeeded > 0 ? Math.min(100, (state.xp / xpNeeded) * 100) : 100;
+    $('hud-xp-bar').style.width = xpPct + '%';
+    if (state.level >= 7) {
+        $('hud-xp-text').textContent = 'MAX LEVEL';
+    } else {
+        $('hud-xp-text').textContent = 'XP: ' + state.xp + '/' + xpNeeded;
+    }
 }
 
 
@@ -217,7 +232,13 @@ function renderShop() {
             grid.appendChild(card);
         } else {
             var card = renderItemCard(item, function() {
-                if (buyItem(idx)) {
+                var result = buyItem(idx);
+                if (result === 'fused') {
+                    showFusionNotification(state._lastFusion);
+                    renderShop();
+                    renderTower();
+                    updateHUD();
+                } else if (result) {
                     renderShop();
                     renderTower();
                     updateHUD();
@@ -226,9 +247,22 @@ function renderShop() {
             grid.appendChild(card);
         }
     });
-    $('btn-levelup').textContent = 'Level Up (' + getLevelUpCost() + 'g)';
-    $('btn-levelup').disabled = state.gold < getLevelUpCost() || state.level >= 7;
     $('btn-refresh').textContent = state.freeRefresh ? 'Refresh (Free)' : 'Refresh (3g)';
+}
+
+function showFusionNotification(towerIndex) {
+    var container = $('damage-numbers');
+    var towerGrid = $('tower-slots');
+    var cards = towerGrid ? towerGrid.querySelectorAll('.item-card') : [];
+    var targetEl = cards[towerIndex] || towerGrid;
+    var rect = targetEl.getBoundingClientRect();
+    var el = document.createElement('div');
+    el.className = 'fusion-notification';
+    el.textContent = 'FUSED! ★';
+    el.style.left = (rect.left + rect.width / 2) + 'px';
+    el.style.top = (rect.top) + 'px';
+    container.appendChild(el);
+    setTimeout(function() { el.remove(); }, 2000);
 }
 
 // === POTION CARD RENDERING ===
@@ -455,6 +489,9 @@ function renderEncounter(encounterData, npcIdx) {
 var combatInterval = null;
 var lastPlayerHP = 0;
 var lastEnemyHP = 0;
+var currentCombatTick = null;
+var currentCombatObj = null;
+var currentTICK = 0;
 
 function startCombat() {
     showPhase('combat');
@@ -473,6 +510,10 @@ function startCombat() {
     var playerTimers = result.playerTimers;
     var enemyTimers = result.enemyTimers;
 
+    currentCombatTick = tick;
+    currentCombatObj = combat;
+    currentTICK = TICK;
+
     lastPlayerHP = combat.playerHP;
     lastEnemyHP = combat.enemyHP;
 
@@ -480,13 +521,16 @@ function startCombat() {
     updateCombatUI(combat, playerTimers, enemyTimers, playerTower, enemyTower);
     $('combat-log').innerHTML = '';
 
+    // Set active speed button
+    updateSpeedButtons();
+
     combatInterval = setInterval(function() {
         tick();
         if (combat.done && combatInterval) {
             clearInterval(combatInterval);
             combatInterval = null;
         }
-    }, TICK * 1000);
+    }, (TICK * 1000) / combatSpeed);
 
     $('btn-skip-combat').onclick = function() {
         if (combatInterval) {
@@ -495,6 +539,29 @@ function startCombat() {
         }
         while (!combat.done) tick();
     };
+}
+
+function setCombatSpeed(speed) {
+    combatSpeed = speed;
+    updateSpeedButtons();
+    // Restart interval with new speed if combat is running
+    if (combatInterval && currentCombatTick && currentCombatObj && !currentCombatObj.done) {
+        clearInterval(combatInterval);
+        combatInterval = setInterval(function() {
+            currentCombatTick();
+            if (currentCombatObj.done && combatInterval) {
+                clearInterval(combatInterval);
+                combatInterval = null;
+            }
+        }, (currentTICK * 1000) / combatSpeed);
+    }
+}
+
+function updateSpeedButtons() {
+    var btns = document.querySelectorAll('.speed-btn');
+    btns.forEach(function(btn) { btn.classList.remove('speed-active'); });
+    var activeBtn = $('btn-speed-' + combatSpeed);
+    if (activeBtn) activeBtn.classList.add('speed-active');
 }
 
 
@@ -620,18 +687,35 @@ function updateCombatUI(combat, playerTimers, enemyTimers, playerTower, enemyTow
 function endCombat(combat) {
     showPhase('result');
     var won = combat.winner === 'player';
+    var xpGained = 0;
     if (won) {
         state.wins++;
+        if (state.endless) state.endlessDay++;
+        xpGained = 8;
+        addXP(8);
         $('result-title').textContent = '⚔️ VICTORY!';
         $('result-title').style.color = '#44ee77';
-        $('result-detail').textContent = 'Your tower overwhelmed the enemy! Wins: ' + state.wins + '/10';
+        if (state.endless) {
+            $('result-detail').textContent = 'Your tower overwhelmed the enemy! Days survived: ' + state.endlessDay;
+        } else {
+            $('result-detail').textContent = 'Your tower overwhelmed the enemy! Wins: ' + state.wins + '/10';
+        }
     } else {
+        xpGained = 3;
+        addXP(3);
+        if (state.endless) state.endlessDay++;
         var heartsLost = getHeartsLost();
         state.hearts = Math.max(0, state.hearts - heartsLost);
         $('result-title').textContent = '💀 DEFEAT';
         $('result-title').style.color = '#ff4444';
         $('result-detail').textContent = 'You lost ' + heartsLost + ' heart(s). Hearts remaining: ' + state.hearts;
     }
+    // Show XP gain
+    var xpDisplay = $('xp-gain-display');
+    xpDisplay.textContent = '+' + xpGained + ' XP!';
+    xpDisplay.classList.remove('hidden');
+    setTimeout(function() { xpDisplay.classList.add('hidden'); }, 3000);
+
     // Show potion generation notifications
     if (state.potionGenerationQueue.length > 0) {
         var potionMsg = 'Potions generated: ' + state.potionGenerationQueue.join(', ');
@@ -641,9 +725,20 @@ function endCombat(combat) {
     }
     updateHUD();
 
-    if (state.wins >= 10) {
-        setTimeout(function() { showGameOver(true); }, 500);
-    } else if (state.hearts <= 0) {
+    // Check for endless mode choice (10 wins, not in endless yet)
+    var endlessChoice = $('endless-choice');
+    var nextDayBtn = $('btn-next-day');
+    if (!state.endless && state.wins >= 10) {
+        endlessChoice.classList.remove('hidden');
+        nextDayBtn.style.display = 'none';
+    } else {
+        endlessChoice.classList.add('hidden');
+        nextDayBtn.style.display = '';
+    }
+
+    if (state.endless && state.hearts <= 0) {
+        setTimeout(function() { showGameOver(false); }, 500);
+    } else if (!state.endless && state.hearts <= 0) {
         setTimeout(function() { showGameOver(false); }, 500);
     }
 }
@@ -670,15 +765,24 @@ function showGameOver(won) {
         $('gameover-title').style.color = '#ffd700';
         $('gameover-detail').textContent = 'You conquered the Doomsday Tower!';
     } else {
-        $('gameover-title').textContent = '💀 TOWER FALLEN';
-        $('gameover-title').style.color = '#ff4444';
-        $('gameover-detail').textContent = 'The Doomsday claimed your tower...';
+        if (state.endless) {
+            $('gameover-title').textContent = '💀 ENDLESS RUN OVER';
+            $('gameover-title').style.color = '#ff4444';
+            $('gameover-detail').textContent = 'The Doomsday finally claimed your tower...';
+        } else {
+            $('gameover-title').textContent = '💀 TOWER FALLEN';
+            $('gameover-title').style.color = '#ff4444';
+            $('gameover-detail').textContent = 'The Doomsday claimed your tower...';
+        }
     }
-    $('gameover-stats').innerHTML =
-        '<p>Days survived: ' + state.day + '</p>' +
-        '<p>Wins: ' + state.wins + ' / 10</p>' +
+    var statsHtml = '<p>Days survived: ' + state.day + '</p>';
+    if (state.endless) {
+        statsHtml += '<p>Endless days survived: ' + state.endlessDay + '</p>';
+    }
+    statsHtml += '<p>Wins: ' + state.wins + '</p>' +
         '<p>Level reached: ' + state.level + '</p>' +
         '<p>Items in tower: ' + state.tower.length + '</p>';
+    $('gameover-stats').innerHTML = statsHtml;
 }
 
 
@@ -798,6 +902,23 @@ function init() {
 
     // Result next day
     $('btn-next-day').addEventListener('click', nextDay);
+
+    // Endless mode choice buttons
+    $('btn-end-run').addEventListener('click', function() {
+        showGameOver(true);
+    });
+    $('btn-endless-mode').addEventListener('click', function() {
+        enterEndlessMode();
+        $('endless-choice').classList.add('hidden');
+        $('btn-next-day').style.display = '';
+        updateHUD();
+        nextDay();
+    });
+
+    // Combat speed controls
+    $('btn-speed-1').addEventListener('click', function() { setCombatSpeed(1); });
+    $('btn-speed-2').addEventListener('click', function() { setCombatSpeed(2); });
+    $('btn-speed-3').addEventListener('click', function() { setCombatSpeed(3); });
 
     // Restart
     $('btn-restart').addEventListener('click', function() {
