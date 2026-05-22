@@ -26,7 +26,27 @@ const state = {
 };
 
 // === XP THRESHOLDS ===
-var XP_THRESHOLDS = [0, 10, 25, 45, 70, 100, 140];
+// XP_THRESHOLDS[N] is the cumulative XP needed to be AT level N.
+// state.xp is total XP since start of run. Index 0 is unused; level 1 needs 0 XP.
+var XP_THRESHOLDS = [0];
+for (var __xpLvl = 1; __xpLvl <= 100; __xpLvl++) {
+    XP_THRESHOLDS[__xpLvl] = Math.round(8 * __xpLvl + 2 * __xpLvl * __xpLvl);
+}
+// Yields: Lv2=24, Lv5=90, Lv10=280, Lv20=960, Lv50=5400, Lv100=20800.
+var MAX_LEVEL = 100;
+
+// Returns progress info for the XP bar relative to the current level.
+function getXPLevelBounds() {
+    if (state.level >= MAX_LEVEL) {
+        return { prev: 0, next: 0, inLevel: 0, perLevel: 0 };
+    }
+    // Level 1's lower bound is 0 XP (you start there); from level 2 onward use the table.
+    var prev = state.level <= 1 ? 0 : (XP_THRESHOLDS[state.level] || 0);
+    var next = XP_THRESHOLDS[state.level + 1] || 0;
+    var inLevel = Math.max(0, state.xp - prev);
+    var perLevel = Math.max(1, next - prev);
+    return { prev: prev, next: next, inLevel: inLevel, perLevel: perLevel };
+}
 
 // === COMBAT SPEED ===
 var combatSpeed = 1;
@@ -250,10 +270,10 @@ function addRandomVialToInventory() {
 }
 
 function addXP(amount) {
-    if (state.level >= 7) return;
+    if (state.level >= MAX_LEVEL) return;
     state.xp += amount;
-    while (state.level < 7 && state.xp >= XP_THRESHOLDS[state.level]) {
-        state.xp -= XP_THRESHOLDS[state.level];
+    // Cumulative semantics: keep accumulating until we hit max level.
+    while (state.level < MAX_LEVEL && state.xp >= XP_THRESHOLDS[state.level + 1]) {
         state.level++;
         state.income += 5;
         // Treasure perk: free epic at level 5
@@ -308,7 +328,7 @@ function getEncounterForDay(day) {
 
 function applyEncounterEffect(effect) {
     // Grant XP for encounter choice
-    addXP(5);
+    addXP(8);
     switch (effect) {
         case 'giveRandomRare': {
             const rares = ITEMS.filter(i => i.rarity === 'rare');
@@ -415,27 +435,89 @@ function generateOpponent() {
         const items = ITEMS.filter(i => i.rarity === rarity);
         for (let w = 0; w < weight; w++) pool.push(...items);
     }
-    var numItems = Math.min(state.day + 1, 6);
-    // Endless mode: scale items more aggressively
+
+    // Aggressive item count scaling: 2 at day 1, 6 by day 8.
+    var maxItemsCap = 6;
+    var numItems = Math.min(2 + Math.floor(state.day / 2), maxItemsCap);
+
+    // Endless mode: extra items every 5 endless days, cap raises to 8.
     if (state.endless) {
-        numItems = Math.min(6, numItems + Math.floor(state.endlessDay / 3));
+        maxItemsCap = 8;
+        numItems = Math.min(numItems + Math.floor(state.endlessDay / 5), maxItemsCap);
     }
+
+    // Endless damage/buff scaling: +5% chance per endless day (capped 50%) for extra rolls.
+    var endlessBonusPct = state.endless ? Math.min(50, state.endlessDay * 5) : 0;
+
     const tower = [];
     for (let i = 0; i < numItems; i++) {
         const template = pick(pool);
         const item = { ...template, stars: 0, uid: crypto.randomUUID() };
-        // Scale stars with day
-        if (state.day >= 6 && Math.random() > 0.6) item.stars = 1;
-        if (state.day >= 9 && Math.random() > 0.7) item.stars = 2;
-        // Endless mode: extra star scaling
+
+        // === Star scaling ===
+        var stars = 0;
+        var roll = Math.random() * 100;
+
+        if (state.day >= 15) {
+            // Day 15+: every item is at least 2-star, with chance for 3-star.
+            stars = roll < 35 ? 3 : 2;
+        } else if (state.day >= 10) {
+            // Day 10+: 50% chance of 2-star, 25% chance of 3-star.
+            if (roll < 25) stars = 3;
+            else if (roll < 75) stars = 2;
+            else if (roll < 90) stars = 1;
+        } else if (state.day >= 7) {
+            // Day 7+: 40% chance of 1-star, 20% chance of 2-star.
+            if (roll < 20) stars = 2;
+            else if (roll < 60) stars = 1;
+        } else if (state.day >= 4) {
+            // Day 4+: 30% chance of 1-star.
+            if (roll < 30) stars = 1;
+        }
+
+        // Endless: additional star scaling on top.
         if (state.endless) {
             var bonusStars = Math.floor(state.endlessDay / 5);
-            item.stars = Math.min(3, item.stars + bonusStars);
+            stars = Math.min(3, stars + bonusStars);
+            if (Math.random() * 100 < endlessBonusPct) stars = Math.min(3, stars + 1);
         }
+
+        item.stars = stars;
         if (item.stars > 0) {
             item.damage = Math.floor(item.damage * (1 + item.stars * 0.25));
             item.multicast += item.stars;
         }
+
+        // === Day 8+: random damage / multicast buff on some items ===
+        if (state.day >= 8) {
+            // ~35% chance per item, +5% per endless day.
+            var buffChance = 35 + (state.endless ? endlessBonusPct : 0);
+            if (Math.random() * 100 < buffChance) {
+                if (Math.random() < 0.5) {
+                    var bonusDmg = 4 + Math.floor(state.day / 2);
+                    item.damage += bonusDmg;
+                } else {
+                    item.multicast += 1;
+                }
+            }
+        }
+
+        // === Day 12+: 30% of enemy items get random "potion" effects ===
+        if (state.day >= 12) {
+            var potionChance = 30 + (state.endless ? Math.min(30, endlessBonusPct) : 0);
+            if (Math.random() * 100 < potionChance) {
+                var effects = ['poison', 'burn', 'heal', 'shield'];
+                var pick1 = effects[Math.floor(Math.random() * effects.length)];
+                var amt = 2 + Math.floor(state.day / 4);
+                switch (pick1) {
+                    case 'poison': item.poisonOnTrigger = (item.poisonOnTrigger || 0) + amt; break;
+                    case 'burn':   item.burnOnTrigger   = (item.burnOnTrigger   || 0) + amt; break;
+                    case 'heal':   item.healOnTrigger   = (item.healOnTrigger   || 0) + amt; break;
+                    case 'shield': item.shieldOnTrigger = (item.shieldOnTrigger || 0) + amt; break;
+                }
+            }
+        }
+
         tower.push(item);
     }
     return tower;
@@ -443,10 +525,12 @@ function generateOpponent() {
 
 // === COMBAT ENGINE ===
 function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
-    const baseHP = 1000 + state.day * 100 + state.permanentBonuses.bonusHP;
+    // baseHP scales with day; in endless mode it scales with endless days too.
+    const baseHP = 1000 + state.day * 120 + (state.endless ? state.endlessDay * 80 : 0);
+    const playerStartHP = baseHP + state.permanentBonuses.bonusHP;
     const combat = {
-        playerHP: baseHP,
-        playerMaxHP: baseHP,
+        playerHP: playerStartHP,
+        playerMaxHP: playerStartHP,
         playerShield: state.permanentBonuses.shieldStart,
         enemyHP: baseHP,
         enemyMaxHP: baseHP,
@@ -462,7 +546,7 @@ function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
     function applyCoreCrack() {
         combat.enemyMaxHP = baseHP - combat.enemyDebuffs.coreCrack;
         combat.enemyHP = Math.min(combat.enemyHP, combat.enemyMaxHP);
-        combat.playerMaxHP = baseHP + state.permanentBonuses.bonusHP - combat.playerDebuffs.coreCrack;
+        combat.playerMaxHP = playerStartHP - combat.playerDebuffs.coreCrack;
         combat.playerHP = Math.min(combat.playerHP, combat.playerMaxHP);
     }
 
@@ -884,6 +968,8 @@ function _snapshotState() {
         if (!Object.prototype.hasOwnProperty.call(state, k)) continue;
         // Skip private keys we know are transient
         if (k === '_lastFusion') continue;
+        if (k === '_selectedPotionIdx') continue;
+        if (k === '_selectedPotionId') continue;
         clone[k] = state[k];
     }
     return JSON.parse(JSON.stringify(clone));
@@ -932,6 +1018,18 @@ function loadGame(slotKey) {
     Object.assign(state, loaded);
     // Reset transient runtime keys
     delete state._lastFusion;
+    delete state._selectedPotionIdx;
+    delete state._selectedPotionId;
+
+    // Migration: older saves stored state.xp as "XP within current level" (per-level
+    // semantics). The new system uses cumulative XP. If an old save is loaded, bump
+    // state.xp up to the cumulative threshold for its current level so the XP bar
+    // displays sanely and progression continues smoothly.
+    if (typeof state.level === 'number' && typeof state.xp === 'number'
+        && state.level > 1 && state.level <= MAX_LEVEL
+        && state.xp < (XP_THRESHOLDS[state.level] || 0)) {
+        state.xp = (XP_THRESHOLDS[state.level] || 0) + Math.max(0, state.xp);
+    }
     return true;
 }
 
