@@ -1738,3 +1738,64 @@ body.potion-dragging .tower-grid {
     background: rgba(68, 238, 119, 0.12);
     box-shadow: 0 0 16px rgba(68, 238, 119, 0.45);
 }
+
+
+
+/* === POTION REJECTION NOTIFICATION === */
+.potion-reject-notification {
+    position: absolute;
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: #ff5544;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 0 8px rgba(255,85,68,0.4);
+    pointer-events: none;
+    z-index: 300;
+    animation: rejectFloat 2.5s ease-out forwards;
+    white-space: nowrap;
+    padding: 0.3rem 0.6rem;
+    background: rgba(20, 10, 10, 0.85);
+    border: 1px solid rgba(255, 85, 68, 0.4);
+    border-radius: 4px;
+}
+@keyframes rejectFloat {
+    0% { transform: translateY(0); opacity: 1; }
+    70% { opacity: 1; }
+    100% { transform: translateY(-30px); opacity: 0; }
+}
+
+/* === ITEM EFFECTIVE VALUE === */
+.item-value {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 0.65rem;
+    color: #aaa;
+    font-weight: 600;
+    opacity: 0.7;
+}
+
+/* === ITEM BUFF BADGES === */
+.item-buffs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-top: 0.2rem;
+    padding-top: 0.2rem;
+    border-top: 1px solid rgba(255,255,255,0.05);
+}
+.item-buff-badge {
+    font-size: 0.55rem;
+    font-weight: 700;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+.buff-heal { background: rgba(68, 238, 119, 0.15); color: #44ee77; border: 1px solid rgba(68, 238, 119, 0.3); }
+.buff-poison { background: rgba(170, 68, 255, 0.15); color: #aa44ff; border: 1px solid rgba(170, 68, 255, 0.3); }
+.buff-burn { background: rgba(255, 102, 51, 0.15); color: #ff6633; border: 1px solid rgba(255, 102, 51, 0.3); }
+.buff-shield { background: rgba(102, 204, 255, 0.15); color: #66ccff; border: 1px solid rgba(102, 204, 255, 0.3); }
+.buff-cd { background: rgba(255, 221, 0, 0.15); color: #ffdd00; border: 1px solid rgba(255, 221, 0, 0.3); }
+.buff-dmg { background: rgba(255, 119, 102, 0.15); color: #ff7766; border: 1px solid rgba(255, 119, 102, 0.3); }
+.buff-crit { background: rgba(68, 136, 255, 0.15); color: #4488ff; border: 1px solid rgba(68, 136, 255, 0.3); }
+.buff-mc { background: rgba(187, 136, 255, 0.15); color: #bb88ff; border: 1px solid rgba(187, 136, 255, 0.3); }

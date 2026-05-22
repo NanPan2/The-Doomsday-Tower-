@@ -115,6 +115,31 @@ function screenShake() {
     setTimeout(() => app.classList.remove('screen-shake'), 300);
 }
 
+// === POTION REJECTION NOTIFICATION ===
+function showRejectNotification(element, message) {
+    if (!element) return;
+    var rect = element.getBoundingClientRect();
+    var el = document.createElement('div');
+    el.className = 'potion-reject-notification';
+    el.textContent = message;
+    el.style.left = (rect.left + rect.width / 2) + 'px';
+    el.style.top = (rect.top - 5) + 'px';
+    el.style.transform = 'translateX(-50%)';
+    $('damage-numbers').appendChild(el);
+    setTimeout(function() { el.remove(); }, 2600);
+}
+
+// === EFFECTIVE VALUE CALCULATION ===
+function getItemEffectiveValue(item) {
+    var val = item.cost
+        + (item.healOnTrigger || 0) * 3
+        + (item.poisonOnTrigger || 0) * 5
+        + (item.burnOnTrigger || 0) * 5
+        + (item.shieldOnTrigger || 0) * 3
+        + item.stars * 15;
+    return val;
+}
+
 
 // === SCREEN MANAGEMENT ===
 function showScreen(name) {
@@ -170,8 +195,49 @@ function renderItemCard(item, clickHandler, showCost) {
     var packColor = PACKS[item.pack] ? PACKS[item.pack].color : '#888';
     var packName = PACKS[item.pack] ? PACKS[item.pack].name : item.pack;
 
+    // Effective value for tower view (not shop)
+    var valueHtml = '';
+    if (!showCost) {
+        var effVal = getItemEffectiveValue(item);
+        valueHtml = '<span class="item-value">Val: ' + effVal + '</span>';
+    }
+
+    // Buff badges for tower view
+    var buffsHtml = '';
+    if (!showCost) {
+        var badges = [];
+        if (item.healOnTrigger && item.healOnTrigger > 0) {
+            badges.push('<span class="item-buff-badge buff-heal">+' + item.healOnTrigger + ' heal</span>');
+        }
+        if (item.poisonOnTrigger && item.poisonOnTrigger > 0) {
+            badges.push('<span class="item-buff-badge buff-poison">+' + item.poisonOnTrigger + ' poison</span>');
+        }
+        if (item.burnOnTrigger && item.burnOnTrigger > 0) {
+            badges.push('<span class="item-buff-badge buff-burn">+' + item.burnOnTrigger + ' burn</span>');
+        }
+        if (item.shieldOnTrigger && item.shieldOnTrigger > 0) {
+            badges.push('<span class="item-buff-badge buff-shield">+' + item.shieldOnTrigger + ' shield</span>');
+        }
+        if (item._cdReduced && item._cdReduced > 0) {
+            badges.push('<span class="item-buff-badge buff-cd">-' + item._cdReduced.toFixed(1) + 's CD</span>');
+        }
+        if (item._potionDmg && item._potionDmg > 0) {
+            badges.push('<span class="item-buff-badge buff-dmg">+' + item._potionDmg + ' DMG</span>');
+        }
+        if (item._potionCrit && item._potionCrit > 0) {
+            badges.push('<span class="item-buff-badge buff-crit">+' + item._potionCrit + '% crit</span>');
+        }
+        if (item._potionMC && item._potionMC > 0) {
+            badges.push('<span class="item-buff-badge buff-mc">+' + item._potionMC + ' MC</span>');
+        }
+        if (badges.length > 0) {
+            buffsHtml = '<div class="item-buffs">' + badges.join('') + '</div>';
+        }
+    }
+
     card.innerHTML =
         (showCost ? '<span class="item-cost">' + item.cost + 'g</span>' : '') +
+        valueHtml +
         '<div class="card-icon-area">' +
             '<div class="card-pack-bg">' + createSVGUse(packIcon, 52, 52, packColor) + '</div>' +
             createSVGUse(tagIcon, 32, 32, iconColor) +
@@ -185,6 +251,7 @@ function renderItemCard(item, clickHandler, showCost) {
             '</div>' +
             '<div class="item-pack-badge" style="color:' + packColor + ';border-color:' + packColor + '40">' + packName + '</div>' +
             '<div class="item-ability">' + item.ability + '</div>' +
+            buffsHtml +
         '</div>';
 
     if (item.frozen) card.classList.add('frozen');
@@ -447,8 +514,12 @@ function applySelectedPotion(towerIndex) {
         return false;
     }
     var sameId = potion.id;
-    var ok = applyPotion(state._selectedPotionIdx, towerIndex);
-    if (!ok) return false;
+    var result = applyPotion(state._selectedPotionIdx, towerIndex);
+    if (result && result.success === false && result.reason) {
+        // Return the rejection info so caller can display notification
+        return result;
+    }
+    if (!result || (result && !result.success)) return false;
 
     // Find another potion of the same type and select it; otherwise clear.
     var nextIdx = -1;
@@ -506,7 +577,12 @@ function setupTowerDropTargets() {
         var towerCards = Array.from(grid.querySelectorAll('.item-card'));
         var towerIndex = towerCards.indexOf(target);
         if (towerIndex < 0) return;
-        if (applyPotion(potionIndex, towerIndex)) {
+        var result = applyPotion(potionIndex, towerIndex);
+        if (result && result.success === false && result.reason) {
+            showRejectNotification(target, result.reason);
+            return;
+        }
+        if (result && result.success) {
             showPotionAppliedEffect(target);
             renderTower();
             renderInventory();
@@ -528,7 +604,8 @@ function setupTowerDropTargets() {
             if (isNaN(potionIndex)) return;
             var potion = state.inventory[potionIndex];
             if (potion && potion.effectType === 'maxhp') {
-                if (applyPotion(potionIndex, -1)) {
+                var result = applyPotion(potionIndex, -1);
+                if (result && result.success) {
                     showPotionAppliedEffect(hpTarget);
                     renderInventory();
                     updateHUD();
@@ -540,7 +617,8 @@ function setupTowerDropTargets() {
             if (state._selectedPotionIdx == null) return;
             var sel = state.inventory[state._selectedPotionIdx];
             if (!sel || sel.effectType !== 'maxhp') return;
-            if (applySelectedPotion(-1)) {
+            var applyResult = applySelectedPotion(-1);
+            if (applyResult === true) {
                 showPotionAppliedEffect(hpTarget);
                 renderInventory();
                 renderTower();
@@ -573,7 +651,12 @@ function renderTower() {
                         var sel = state.inventory[state._selectedPotionIdx];
                         // Health Vials don't apply to tower items; ignore the click.
                         if (sel && sel.effectType === 'maxhp') return;
-                        if (applySelectedPotion(idx)) {
+                        var applyResult = applySelectedPotion(idx);
+                        if (applyResult && applyResult.success === false && applyResult.reason) {
+                            showRejectNotification(card, applyResult.reason);
+                            return;
+                        }
+                        if (applyResult === true) {
                             showPotionAppliedEffect(card);
                             renderTower();
                             renderInventory();
@@ -607,7 +690,12 @@ function renderTower() {
                     card.classList.remove('tower-item-drop-target');
                     var potionIndex = parseInt(e.dataTransfer.getData('text/plain'));
                     if (isNaN(potionIndex)) return;
-                    if (applyPotion(potionIndex, idx)) {
+                    var result = applyPotion(potionIndex, idx);
+                    if (result && result.success === false && result.reason) {
+                        showRejectNotification(card, result.reason);
+                        return;
+                    }
+                    if (result && result.success) {
                         showPotionAppliedEffect(card);
                         renderTower();
                         renderInventory();

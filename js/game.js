@@ -172,6 +172,7 @@ function fuseItem(existingItem) {
     existingItem.stars = Math.min(3, existingItem.stars + 1);
     existingItem.damage = Math.floor(existingItem.damage * 1.25);
     existingItem.multicast += 1;
+    // Preserve potion tracking fields through fusion (they stay as-is)
 }
 
 function sellItem(towerIndex) {
@@ -202,18 +203,34 @@ function applyPotion(potionIndex, towerIndex) {
     if (potion.effectType === 'maxhp') {
         state.permanentBonuses.bonusHP += potion.effectValue;
         state.inventory.splice(potionIndex, 1);
-        return true;
+        return { success: true };
     }
 
     var item = state.tower[towerIndex];
     if (!item) return false;
 
+    // === Rejection checks ===
+    if (potion.effectType === 'cooldown' && item.cooldown <= 0.3) {
+        return { success: false, reason: 'Cooldown already at minimum (0.3s)' };
+    }
+    if (potion.effectType === 'crit' && item.crit >= 100) {
+        return { success: false, reason: 'Crit chance already at maximum (100%)' };
+    }
+    if (potion.effectType === 'damage' && item.damage === 0 && item.cooldown === 0) {
+        return { success: false, reason: 'Cannot add damage to passive items' };
+    }
+    if (potion.effectType === 'multicast' && item.cooldown === 0) {
+        return { success: false, reason: 'Cannot add multicast to passive items' };
+    }
+
     switch (potion.effectType) {
         case 'damage':
             item.damage += potion.effectValue;
+            item._potionDmg = (item._potionDmg || 0) + potion.effectValue;
             break;
         case 'crit':
             item.crit += potion.effectValue;
+            item._potionCrit = (item._potionCrit || 0) + potion.effectValue;
             break;
         case 'heal':
             item.healOnTrigger = (item.healOnTrigger || 0) + potion.effectValue;
@@ -229,9 +246,11 @@ function applyPotion(potionIndex, towerIndex) {
             break;
         case 'cooldown':
             item.cooldown = Math.max(0.3, item.cooldown - potion.effectValue);
+            item._cdReduced = (item._cdReduced || 0) + potion.effectValue;
             break;
         case 'multicast':
             item.multicast += potion.effectValue;
+            item._potionMC = (item._potionMC || 0) + potion.effectValue;
             break;
         case 'healboost':
             item.healOnTrigger = (item.healOnTrigger || 0) + potion.effectValue;
@@ -253,7 +272,7 @@ function applyPotion(potionIndex, towerIndex) {
     }
 
     state.inventory.splice(potionIndex, 1);
-    return true;
+    return { success: true };
 }
 
 function addPotionToInventory(potionId) {
