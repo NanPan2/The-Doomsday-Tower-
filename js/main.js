@@ -230,6 +230,16 @@ function renderItemCard(item, clickHandler, showCost) {
         if (item._potionMC && item._potionMC > 0) {
             badges.push('<span class="item-buff-badge buff-mc">+' + item._potionMC + ' MC</span>');
         }
+        // Crystal badges
+        if (item.crystals && item.crystals.length > 0) {
+            item.crystals.forEach(function(c) {
+                badges.push('<span class="item-buff-badge buff-crystal">💎 ' + c.name + '</span>');
+            });
+        }
+        // Essence badge
+        if (item.essence) {
+            badges.push('<span class="item-buff-badge buff-essence">🌟 ' + item.essence.name + '</span>');
+        }
         if (badges.length > 0) {
             buffsHtml = '<div class="item-buffs">' + badges.join('') + '</div>';
         }
@@ -286,6 +296,17 @@ function hideTooltip() {
 function renderShop() {
     var grid = $('shop-items');
     grid.innerHTML = '';
+
+    // Lucky Shop banner
+    var luckyBanner = $('lucky-shop-banner');
+    if (luckyBanner) {
+        if (state._luckyShopType) {
+            luckyBanner.classList.remove('hidden');
+        } else {
+            luckyBanner.classList.add('hidden');
+        }
+    }
+
     state.shop.forEach(function(item, idx) {
         if (item.isPotion) {
             var card = renderPotionCard(item, function() {
@@ -296,6 +317,61 @@ function renderShop() {
                     updateHUD();
                 }
             }, true);
+            if (item.deepFrozen) card.classList.add('deep-frozen');
+            card.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                deepFreezeItem(idx);
+                renderShop();
+            });
+            grid.appendChild(card);
+        } else if (item.isCrystal) {
+            var card = renderCrystalCard(item, function() {
+                if (buyCrystal(idx)) {
+                    renderShop();
+                    renderTower();
+                    renderInventory();
+                    updateHUD();
+                }
+            }, true);
+            if (item.deepFrozen) card.classList.add('deep-frozen');
+            card.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                deepFreezeItem(idx);
+                renderShop();
+            });
+            grid.appendChild(card);
+        } else if (item.isOrb) {
+            var card = renderOrbCard(item, function() {
+                if (buyOrb(idx)) {
+                    renderShop();
+                    renderTower();
+                    renderInventory();
+                    renderOrbs();
+                    updateHUD();
+                }
+            }, true);
+            if (item.deepFrozen) card.classList.add('deep-frozen');
+            card.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                deepFreezeItem(idx);
+                renderShop();
+            });
+            grid.appendChild(card);
+        } else if (item.isEssence) {
+            var card = renderEssenceCard(item, function() {
+                if (buyEssence(idx)) {
+                    renderShop();
+                    renderTower();
+                    renderInventory();
+                    updateHUD();
+                }
+            }, true);
+            if (item.deepFrozen) card.classList.add('deep-frozen');
+            card.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                deepFreezeItem(idx);
+                renderShop();
+            });
             grid.appendChild(card);
         } else {
             var card = renderItemCard(item, function() {
@@ -311,10 +387,20 @@ function renderShop() {
                     updateHUD();
                 }
             });
+            if (item.deepFrozen) card.classList.add('deep-frozen');
+            card.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                deepFreezeItem(idx);
+                renderShop();
+            });
             grid.appendChild(card);
         }
     });
     $('btn-refresh').textContent = state.freeRefresh ? 'Refresh (Free)' : 'Refresh (3g)';
+    // Reset lucky shop type display after render
+    if (state._luckyShopType) {
+        delete state._luckyShopType;
+    }
 }
 
 function showFusionNotification(towerIndex) {
@@ -352,6 +438,85 @@ function renderPotionCard(potion, clickHandler, showCost) {
     return card;
 }
 
+// === CRYSTAL CARD RENDERING ===
+function renderCrystalCard(crystal, clickHandler, showCost) {
+    var card = document.createElement('div');
+    card.className = 'item-card crystal-card';
+    var costHtml = showCost ? '<span class="item-cost">' + crystal.cost + 'g</span>' : '';
+    card.innerHTML =
+        costHtml +
+        '<div class="card-icon-area crystal-icon-area">' +
+            '<span class="crystal-emoji">💎</span>' +
+        '</div>' +
+        '<div class="card-body">' +
+            '<div class="item-name crystal-name">' + crystal.name + '</div>' +
+            '<div class="item-pack-badge crystal-badge">Crystal</div>' +
+            '<div class="item-ability">' + crystal.desc + '</div>' +
+        '</div>';
+    if (clickHandler) card.addEventListener('click', clickHandler);
+    return card;
+}
+
+// === ORB CARD RENDERING ===
+function renderOrbCard(orb, clickHandler, showCost) {
+    var card = document.createElement('div');
+    card.className = 'item-card orb-card rarity-' + orb.rarity;
+    var costHtml = showCost ? '<span class="item-cost">' + orb.cost + 'g</span>' : '';
+    card.innerHTML =
+        costHtml +
+        '<div class="card-icon-area orb-icon-area">' +
+            '<span class="orb-emoji">🔮</span>' +
+        '</div>' +
+        '<div class="card-body">' +
+            '<div class="item-name orb-name">' + orb.name + '</div>' +
+            '<div class="item-pack-badge orb-badge">Orb</div>' +
+            '<div class="item-ability">' + orb.desc + '</div>' +
+        '</div>';
+    if (clickHandler) card.addEventListener('click', clickHandler);
+    return card;
+}
+
+// === ESSENCE CARD RENDERING ===
+function renderEssenceCard(essence, clickHandler, showCost) {
+    var card = document.createElement('div');
+    card.className = 'item-card essence-card';
+    var costHtml = showCost ? '<span class="item-cost">' + essence.cost + 'g</span>' : '';
+    card.innerHTML =
+        costHtml +
+        '<div class="card-icon-area essence-icon-area">' +
+            '<span class="essence-emoji">🌟</span>' +
+        '</div>' +
+        '<div class="card-body">' +
+            '<div class="item-name essence-name">' + essence.name + '</div>' +
+            '<div class="item-pack-badge essence-badge">Essence</div>' +
+            '<div class="item-ability">' + essence.desc + '</div>' +
+        '</div>';
+    if (clickHandler) card.addEventListener('click', clickHandler);
+    return card;
+}
+
+// === ORBS DISPLAY RENDERING ===
+function renderOrbs() {
+    var grid = $('orbs-display');
+    var countEl = $('orb-count');
+    if (!grid) return;
+    grid.innerHTML = '';
+    if (countEl) countEl.textContent = '(' + state.orbs.length + '/3)';
+    if (state.orbs.length === 0) {
+        grid.innerHTML = '<div class="orbs-empty">No orbs equipped.</div>';
+        return;
+    }
+    state.orbs.forEach(function(orb, idx) {
+        var el = document.createElement('div');
+        el.className = 'orb-equipped rarity-' + orb.rarity;
+        el.innerHTML =
+            '<span class="orb-icon">🔮</span>' +
+            '<span class="orb-eq-name">' + orb.name + '</span>' +
+            '<span class="orb-eq-desc">' + orb.desc + '</span>';
+        grid.appendChild(el);
+    });
+}
+
 // === INVENTORY RENDERING (Drag & Drop + Click-to-Apply) ===
 function renderInventory() {
     var grid = $('inventory-slots');
@@ -386,28 +551,88 @@ function renderInventory() {
 
     state.inventory.forEach(function(potion, idx) {
         var card = document.createElement('div');
-        card.className = 'potion-card potion-inventory-card';
         card.draggable = true;
         card.setAttribute('data-potion-index', idx);
-        card.style.borderColor = potion.color || '#aa44ff';
+
+        // Determine card type
+        if (potion.isCrystal) {
+            card.className = 'potion-card potion-inventory-card crystal-inv-card';
+            card.style.borderColor = '#00cccc';
+            card.innerHTML =
+                '<div class="potion-card-icon" style="background:#00cccc22">' +
+                    '<span class="potion-emoji">💎</span>' +
+                '</div>' +
+                '<div class="potion-card-body">' +
+                    '<div class="potion-card-name" style="color:#00cccc">' + potion.name + '</div>' +
+                    '<div class="potion-card-desc">' + potion.desc + '</div>' +
+                '</div>';
+        } else if (potion.isEssence) {
+            card.className = 'potion-card potion-inventory-card essence-inv-card';
+            card.style.borderColor = '#ff88ff';
+            card.innerHTML =
+                '<div class="potion-card-icon" style="background:#ff88ff22">' +
+                    '<span class="potion-emoji">🌟</span>' +
+                '</div>' +
+                '<div class="potion-card-body">' +
+                    '<div class="potion-card-name" style="color:#ff88ff">' + potion.name + '</div>' +
+                    '<div class="potion-card-desc">' + potion.desc + '</div>' +
+                '</div>';
+        } else {
+            card.className = 'potion-card potion-inventory-card';
+            card.style.borderColor = potion.color || '#aa44ff';
+            card.innerHTML =
+                '<div class="potion-card-icon" style="background:' + (potion.color || '#aa44ff') + '22">' +
+                    '<span class="potion-emoji">🧪</span>' +
+                '</div>' +
+                '<div class="potion-card-body">' +
+                    '<div class="potion-card-name" style="color:' + (potion.color || '#aa44ff') + '">' + potion.name + '</div>' +
+                    '<div class="potion-card-desc">' + potion.desc + '</div>' +
+                '</div>';
+        }
 
         // Highlight every potion of the currently-selected type
         if (state._selectedPotionId && potion.id === state._selectedPotionId) {
             card.classList.add('potion-selected');
         }
 
-        card.innerHTML =
-            '<div class="potion-card-icon" style="background:' + (potion.color || '#aa44ff') + '22">' +
-                '<span class="potion-emoji">🧪</span>' +
-            '</div>' +
-            '<div class="potion-card-body">' +
-                '<div class="potion-card-name" style="color:' + (potion.color || '#aa44ff') + '">' + potion.name + '</div>' +
-                '<div class="potion-card-desc">' + potion.desc + '</div>' +
-            '</div>';
-
-        // Click to toggle selection (does NOT prevent drag)
+        // Click to toggle selection or use directly
         card.addEventListener('click', function(e) {
-            // If user is mid-drag this won't fire; click only fires after a click without drag
+            // Lucky Potion: use directly without target
+            if (potion.effectType === 'lucky_shop') {
+                if (confirm('Use Lucky Potion? Next shop will be curated.')) {
+                    useLuckyPotion(idx);
+                    renderInventory();
+                    updateHUD();
+                }
+                return;
+            }
+            // Crystal: select for socketing
+            if (potion.isCrystal) {
+                if (state._selectedPotionIdx === idx) {
+                    clearPotionSelection();
+                } else {
+                    selectPotion(idx);
+                }
+                renderInventory();
+                renderTower();
+                renderPotionSelectionStatus();
+                updateClickableHighlights();
+                return;
+            }
+            // Essence: select for applying
+            if (potion.isEssence) {
+                if (state._selectedPotionIdx === idx) {
+                    clearPotionSelection();
+                } else {
+                    selectPotion(idx);
+                }
+                renderInventory();
+                renderTower();
+                renderPotionSelectionStatus();
+                updateClickableHighlights();
+                return;
+            }
+            // Normal potion selection
             if (state._selectedPotionIdx === idx) {
                 clearPotionSelection();
             } else {
@@ -513,6 +738,29 @@ function applySelectedPotion(towerIndex) {
         clearPotionSelection();
         return false;
     }
+
+    // Crystal socketing
+    if (potion.isCrystal) {
+        var result = socketCrystal(state._selectedPotionIdx, towerIndex);
+        if (result && result.success === false && result.reason) {
+            return result;
+        }
+        if (!result || (result && !result.success)) return false;
+        clearPotionSelection();
+        return true;
+    }
+
+    // Essence applying
+    if (potion.isEssence) {
+        var result = applyEssence(state._selectedPotionIdx, towerIndex);
+        if (result && result.success === false && result.reason) {
+            return result;
+        }
+        if (!result || (result && !result.success)) return false;
+        clearPotionSelection();
+        return true;
+    }
+
     var sameId = potion.id;
     var result = applyPotion(state._selectedPotionIdx, towerIndex);
     if (result && result.success === false && result.reason) {
@@ -577,6 +825,44 @@ function setupTowerDropTargets() {
         var towerCards = Array.from(grid.querySelectorAll('.item-card'));
         var towerIndex = towerCards.indexOf(target);
         if (towerIndex < 0) return;
+
+        var inventoryItem = state.inventory[potionIndex];
+        if (!inventoryItem) return;
+
+        // Crystal socketing via drag
+        if (inventoryItem.isCrystal) {
+            var result = socketCrystal(potionIndex, towerIndex);
+            if (result && result.success === false && result.reason) {
+                showRejectNotification(target, result.reason);
+                return;
+            }
+            if (result && result.success) {
+                showPotionAppliedEffect(target);
+                renderTower();
+                renderInventory();
+                renderShop();
+                updateHUD();
+            }
+            return;
+        }
+
+        // Essence applying via drag
+        if (inventoryItem.isEssence) {
+            var result = applyEssence(potionIndex, towerIndex);
+            if (result && result.success === false && result.reason) {
+                showRejectNotification(target, result.reason);
+                return;
+            }
+            if (result && result.success) {
+                showPotionAppliedEffect(target);
+                renderTower();
+                renderInventory();
+                renderShop();
+                updateHUD();
+            }
+            return;
+        }
+
         var result = applyPotion(potionIndex, towerIndex);
         if (result && result.success === false && result.reason) {
             showRejectNotification(target, result.reason);
@@ -1099,6 +1385,7 @@ function nextDay() {
         renderShop();
         renderTower();
         renderInventory();
+        renderOrbs();
         showPhase('shop');
         state._pendingEncounter = encounter;
     } else {
@@ -1106,6 +1393,7 @@ function nextDay() {
         renderShop();
         renderTower();
         renderInventory();
+        renderOrbs();
         showPhase('shop');
     }
     // Auto-save at the start of each day
@@ -1338,6 +1626,7 @@ function onLoadSlot(slotKey) {
     renderShop();
     renderTower();
     renderInventory();
+    renderOrbs();
     updateHUD();
 
     // Restore phase. Combat / result phases are transient -> reset to shop.
@@ -1461,6 +1750,7 @@ function init() {
         renderShop();
         renderTower();
         renderInventory();
+        renderOrbs();
         setupTowerDropTargets();
         updateHUD();
         showPhase('shop');
@@ -1585,8 +1875,10 @@ function init() {
         }
     });
 
-    // Right-click anywhere clears the active potion selection
+    // Right-click anywhere clears the active potion selection (except on shop items for deep freeze)
     document.addEventListener('contextmenu', function(e) {
+        // Don't interfere with deep freeze right-clicks on shop items
+        if (e.target.closest('#shop-items')) return;
         if (state._selectedPotionIdx == null) return;
         e.preventDefault();
         clearPotionSelection();

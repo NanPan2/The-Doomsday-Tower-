@@ -94,6 +94,12 @@ const ITEMS = [
     { id: 'mana_capacitor', name: 'Mana Capacitor', rarity: 'epic', damage: 15, cooldown: 3.0, crit: 0, multicast: 1, tags: ['Spell'], pack: 'mana', cost: 58, ability: 'On trigger: Permanently gain +1 multicast every 4th trigger.', special: 'stack_multicast_4' },
     { id: 'void_siphon', name: 'Void Siphon', rarity: 'rare', damage: 12, cooldown: 2.8, crit: 0, multicast: 1, tags: ['Weapon'], pack: 'dark', cost: 36, ability: 'On trigger: Gain +1 damage per debuff on enemy. Stacks permanently.', special: 'stack_debuff_damage' },
     { id: 'elven_amplifier', name: 'Elven Amplifier', rarity: 'legendary', damage: 10, cooldown: 1.5, crit: 0, multicast: 2, tags: ['Weapon'], pack: 'gorthon', cost: 72, ability: 'On trigger: Permanently gain +0.5 multicast every 3rd trigger.', special: 'stack_multicast_3' },
+
+    // --- ARTIFACT ITEMS ---
+    { id: 'heart_of_ucliat', name: 'Heart of Ucliat', rarity: 'relic', damage: 0, cooldown: 12.0, crit: 0, multicast: 1, tags: ['Relic'], pack: 'church', cost: 80, ability: 'On trigger: Revive — if your tower would die this combat, survive with 1 HP once.' },
+    { id: 'doomsday_clock', name: 'Doomsday Clock', rarity: 'relic', damage: 0, cooldown: 0, crit: 0, multicast: 0, tags: ['Relic'], pack: 'doomsday', cost: 70, ability: 'Passive: Combat time limit reduced to 30s. All items get +50% damage.' },
+    { id: 'mirror_of_fate', name: 'Mirror of Fate', rarity: 'relic', damage: 0, cooldown: 8.0, crit: 0, multicast: 1, tags: ['Relic'], pack: 'lostmagic', cost: 75, ability: 'On trigger: Copy the highest-damage enemy item effect for this combat.' },
+    { id: 'infinity_loop', name: 'Infinity Loop', rarity: 'relic', damage: 5, cooldown: 1.0, crit: 0, multicast: 1, tags: ['Relic'], pack: 'gorthon', cost: 85, ability: 'On trigger: Permanently gain +1 to ALL stats (damage, multicast, crit).', special: 'infinity_loop' },
 ];
 
 
@@ -149,6 +155,11 @@ const ENCOUNTERS = [
             { label: 'Holy Favor', desc: 'Gain 40 Shield at start of each combat permanently.', effect: 'permanentShield40' },
             { label: 'Mend', desc: 'Heal 3 Hearts.', effect: 'heal3Hearts' },
           ]},
+        { name: 'King Midas', icon: '👑', flavor: 'Everything he touches turns to gold.',
+          choices: [
+            { label: 'Golden Touch', desc: 'Sell your weakest tower item for 3x its value.', effect: 'midasSellWeakest' },
+            { label: 'Gold Rush', desc: 'Gain 80 gold immediately but lose 1 heart.', effect: 'midasGoldRush' },
+          ]},
     ]},
     { day: 9, npcs: [
         { name: 'Carmen', icon: '🎭', flavor: 'A Tenebrim-aligned trickster. Risk and reward.',
@@ -185,6 +196,7 @@ const POTIONS = [
     { id: 'mending_serum', name: 'Mending Serum', cost: 20, type: 'weapon-buff', desc: '+8 heal on trigger to target item.', effectType: 'healboost', effectValue: 8, color: '#22cc66' },
     { id: 'morph_vial', name: 'Morph Vial', cost: 22, type: 'utility', desc: 'Transform target item into random item of same rarity.', effectType: 'morph', effectValue: 0, color: '#ff8800' },
     { id: 'crownforge_brew', name: 'Crownforge Brew', cost: 45, type: 'utility', desc: 'Upgrade target item star level by 1.', effectType: 'upgrade', effectValue: 1, color: '#ffd700' },
+    { id: 'lucky_potion', name: 'Lucky Potion', cost: 25, type: 'utility', desc: 'Next shop will be a Lucky Shop (curated selection).', effectType: 'lucky_shop', effectValue: 0, color: '#ffd700' },
 ];
 
 // === LEVEL THRESHOLDS FOR RARITY ACCESS ===
@@ -197,3 +209,30 @@ const LEVEL_RARITY_ACCESS = {
     6: { common: 10, rare: 22, epic: 28, legendary: 24, relic: 10, cursed: 6 },
     7: { common: 5, rare: 15, epic: 30, legendary: 28, relic: 14, cursed: 8 },
 };
+
+// === CRYSTALS ===
+const CRYSTALS = [
+    { id: 'mana_crystal', name: 'Mana Crystal', cost: 20, desc: 'Socket into an item: +3 damage per Mana Pack item in tower.', effectType: 'mana_scaling_dmg', baseValue: 3 },
+    { id: 'power_crystal', name: 'Power Crystal', cost: 25, desc: 'Socket into an item: +2 multicast per 3 items in tower.', effectType: 'item_count_mc', baseValue: 2 },
+    { id: 'life_crystal', name: 'Life Crystal', cost: 18, desc: 'Socket into an item: +5 heal per Church Pack item in tower.', effectType: 'church_scaling_heal', baseValue: 5 },
+    { id: 'void_crystal', name: 'Void Crystal', cost: 22, desc: 'Socket into an item: +3 poison per Dark Pack item in tower.', effectType: 'dark_scaling_poison', baseValue: 3 },
+    { id: 'speed_crystal', name: 'Speed Crystal', cost: 30, desc: 'Socket into an item: -0.1s cooldown per Gorthon Pack item in tower.', effectType: 'gorthon_scaling_cd', baseValue: 0.1 },
+];
+
+// === ORBS ===
+const ORBS = [
+    { id: 'orb_fury', name: 'Orb of Fury', cost: 40, rarity: 'rare', desc: 'All items gain +3 damage at start of combat.', effect: 'all_dmg_3' },
+    { id: 'orb_haste', name: 'Orb of Haste', cost: 45, rarity: 'rare', desc: 'All items get -0.2s cooldown at start of combat.', effect: 'all_cd_02' },
+    { id: 'orb_mending', name: 'Orb of Mending', cost: 35, rarity: 'rare', desc: 'Heal 30 HP per second during combat.', effect: 'regen_30' },
+    { id: 'orb_venom', name: 'Orb of Venom', cost: 38, rarity: 'rare', desc: 'Apply 5 Mana Poison to enemy at start of combat.', effect: 'start_poison_5' },
+    { id: 'orb_fortify', name: 'Orb of Fortification', cost: 42, rarity: 'epic', desc: 'Gain 100 Shield at start of combat.', effect: 'start_shield_100' },
+    { id: 'orb_multicast', name: 'Orb of Echoes', cost: 60, rarity: 'epic', desc: 'All items gain +1 multicast at start of combat.', effect: 'all_mc_1' },
+];
+
+// === ESSENCES ===
+const ESSENCES = [
+    { id: 'essence_lifesteal', name: 'Essence of Lifesteal', cost: 35, desc: 'Item heals 20% of damage dealt.', effectType: 'lifesteal', effectValue: 0.2 },
+    { id: 'essence_chain', name: 'Essence of Chaining', cost: 40, desc: 'Item triggers the item below it on fire.', effectType: 'chain_below', effectValue: 1 },
+    { id: 'essence_execute', name: 'Essence of Execution', cost: 45, desc: 'Item deals 2x damage when enemy below 30% HP.', effectType: 'execute', effectValue: 2 },
+    { id: 'essence_thorns', name: 'Essence of Thorns', cost: 30, desc: 'When your tower takes damage, this item fires once.', effectType: 'thorns', effectValue: 1 },
+];
