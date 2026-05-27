@@ -1799,3 +1799,199 @@ body.potion-dragging .tower-grid {
 .buff-dmg { background: rgba(255, 119, 102, 0.15); color: #ff7766; border: 1px solid rgba(255, 119, 102, 0.3); }
 .buff-crit { background: rgba(68, 136, 255, 0.15); color: #4488ff; border: 1px solid rgba(68, 136, 255, 0.3); }
 .buff-mc { background: rgba(187, 136, 255, 0.15); color: #bb88ff; border: 1px solid rgba(187, 136, 255, 0.3); }
+
+
+
+/* === CRYSTAL CARDS === */
+.crystal-card {
+    border-color: #00cccc !important;
+    box-shadow: 0 0 8px rgba(0, 204, 204, 0.3);
+}
+.crystal-card:hover {
+    box-shadow: 0 0 16px rgba(0, 204, 204, 0.6), 0 4px 16px var(--shadow-medium) !important;
+}
+.crystal-icon-area {
+    background: linear-gradient(180deg, rgba(0, 204, 204, 0.12), transparent) !important;
+}
+.crystal-emoji {
+    font-size: 1.6rem;
+}
+.crystal-name {
+    color: #00cccc !important;
+}
+.crystal-badge {
+    color: #00cccc !important;
+    border-color: rgba(0, 204, 204, 0.4) !important;
+}
+.crystal-inv-card {
+    border-color: #00cccc !important;
+}
+
+/* === ORB CARDS === */
+.orb-card {
+    border-color: #aa66ff !important;
+    box-shadow: 0 0 12px rgba(170, 102, 255, 0.3);
+    animation: orbGlow 2.5s ease-in-out infinite alternate;
+}
+@keyframes orbGlow {
+    0% { box-shadow: 0 0 8px rgba(170, 102, 255, 0.2); }
+    100% { box-shadow: 0 0 20px rgba(170, 102, 255, 0.5); }
+}
+.orb-card:hover {
+    box-shadow: 0 0 24px rgba(170, 102, 255, 0.7), 0 4px 16px var(--shadow-medium) !important;
+}
+.orb-icon-area {
+    background: radial-gradient(circle, rgba(170, 102, 255, 0.15), transparent) !important;
+}
+.orb-emoji {
+    font-size: 1.6rem;
+}
+.orb-name {
+    color: #bb88ff !important;
+}
+.orb-badge {
+    color: #bb88ff !important;
+    border-color: rgba(170, 102, 255, 0.4) !important;
+}
+
+/* === ESSENCE CARDS === */
+.essence-card {
+    border-color: #ff88ff !important;
+    box-shadow: 0 0 10px rgba(255, 136, 255, 0.3);
+}
+.essence-card:hover {
+    box-shadow: 0 0 20px rgba(255, 136, 255, 0.6), 0 4px 16px var(--shadow-medium) !important;
+}
+.essence-icon-area {
+    background: linear-gradient(180deg, rgba(255, 136, 255, 0.12), transparent) !important;
+}
+.essence-emoji {
+    font-size: 1.6rem;
+}
+.essence-name {
+    color: #ff88ff !important;
+}
+.essence-badge {
+    color: #ff88ff !important;
+    border-color: rgba(255, 136, 255, 0.4) !important;
+}
+.essence-inv-card {
+    border-color: #ff88ff !important;
+}
+
+/* === ORBS SECTION === */
+.orbs-section {
+    margin-top: 1.5rem;
+    padding: 1rem 1.2rem;
+    background: linear-gradient(135deg, #0e0e1a 0%, #14101e 50%, #0c0c16 100%);
+    border: 2px solid #3a2a5a;
+    border-radius: 8px;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+}
+.orbs-section h3 {
+    margin-bottom: 0.5rem;
+    color: #bb88ff;
+    font-family: var(--font-display);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+}
+.orb-count {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+}
+.orbs-grid {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    min-height: 50px;
+    align-items: flex-start;
+}
+.orbs-empty {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-style: italic;
+    padding: 0.5rem;
+}
+.orb-equipped {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.8rem;
+    background: linear-gradient(135deg, #1e1a2e 0%, #14122a 100%);
+    border: 2px solid #6644aa;
+    border-radius: 20px;
+    min-width: 150px;
+    animation: orbEquippedPulse 3s ease-in-out infinite alternate;
+}
+@keyframes orbEquippedPulse {
+    0% { box-shadow: 0 0 6px rgba(102, 68, 170, 0.3); }
+    100% { box-shadow: 0 0 16px rgba(102, 68, 170, 0.6); }
+}
+.orb-icon {
+    font-size: 1.2rem;
+}
+.orb-eq-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #bb88ff;
+    white-space: nowrap;
+}
+.orb-eq-desc {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* === DEEP FREEZE === */
+.item-card.deep-frozen {
+    border-color: #3399ff !important;
+    box-shadow: 0 0 16px rgba(51, 153, 255, 0.5), inset 0 0 24px rgba(51, 153, 255, 0.08) !important;
+    position: relative;
+}
+.item-card.deep-frozen::after {
+    content: '❄️';
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 0.8rem;
+    z-index: 5;
+    filter: drop-shadow(0 0 4px rgba(51, 153, 255, 0.8));
+}
+
+/* === LUCKY SHOP BANNER === */
+.lucky-shop-banner {
+    text-align: center;
+    padding: 0.6rem 1rem;
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 0, 0.1), rgba(255, 215, 0, 0.15));
+    border: 2px solid #ffd700;
+    border-radius: 6px;
+    color: #ffd700;
+    font-size: 1.1rem;
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+    margin-bottom: 0.8rem;
+    animation: luckyBannerPulse 1.5s ease-in-out infinite alternate;
+}
+.lucky-shop-banner.hidden {
+    display: none;
+}
+@keyframes luckyBannerPulse {
+    0% { box-shadow: 0 0 8px rgba(255, 215, 0, 0.3); }
+    100% { box-shadow: 0 0 24px rgba(255, 215, 0, 0.7); }
+}
+
+/* === CRYSTAL & ESSENCE BUFF BADGES === */
+.buff-crystal {
+    background: rgba(0, 204, 204, 0.15);
+    color: #00cccc;
+    border: 1px solid rgba(0, 204, 204, 0.3);
+}
+.buff-essence {
+    background: rgba(255, 136, 255, 0.15);
+    color: #ff88ff;
+    border: 1px solid rgba(255, 136, 255, 0.3);
+}

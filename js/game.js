@@ -23,6 +23,9 @@ const state = {
     xp: 0,
     endless: false,
     endlessDay: 0,
+    orbs: [],
+    nextShopLucky: false,
+    deepFrozenItems: [],
 };
 
 // === XP THRESHOLDS ===
@@ -72,6 +75,9 @@ function resetState() {
     state.xp = 0;
     state.endless = false;
     state.endlessDay = 0;
+    state.orbs = [];
+    state.nextShopLucky = false;
+    state.deepFrozenItems = [];
     combatSpeed = 1;
 }
 
@@ -86,6 +92,23 @@ function generateShop() {
         state.shopFrozen = false;
         return;
     }
+
+    // Save deep-frozen items before clearing shop
+    var previousDeepFrozen = [];
+    state.shop.forEach(function(item) {
+        if (item.deepFrozen) previousDeepFrozen.push(JSON.parse(JSON.stringify(item)));
+    });
+
+    // Lucky Shop logic
+    if (state.nextShopLucky) {
+        state.nextShopLucky = false;
+        generateLuckyShop();
+        // Re-insert deep-frozen items
+        reinsertDeepFrozen(previousDeepFrozen);
+        state.freeRefresh = state.selectedPerks.includes('adventurers_guild');
+        return;
+    }
+
     const shopSize = state.selectedPerks.includes('expanded_stock') ? 9 : 7;
     const rarityTable = LEVEL_RARITY_ACCESS[Math.min(state.level, 7)];
     const pool = [];
@@ -112,16 +135,137 @@ function generateShop() {
         var potionTemplate = pick(POTIONS);
         state.shop.push(createShopPotion(potionTemplate));
     }
+    // Add crystal at ~30% chance
+    if (Math.random() < 0.3) {
+        var crystalTemplate = pick(CRYSTALS);
+        state.shop.push(createShopCrystal(crystalTemplate));
+    }
+    // Add orb at ~10% chance (level 3+)
+    if (state.level >= 3 && Math.random() < 0.1) {
+        var orbTemplate = pick(ORBS);
+        state.shop.push(createShopOrb(orbTemplate));
+    }
+    // Add essence at ~15% chance (level 4+)
+    if (state.level >= 4 && Math.random() < 0.15) {
+        var essenceTemplate = pick(ESSENCES);
+        state.shop.push(createShopEssence(essenceTemplate));
+    }
+    // Re-insert deep-frozen items (60% chance each)
+    reinsertDeepFrozen(previousDeepFrozen);
     // Free refresh for Adventurer's Guild perk
     state.freeRefresh = state.selectedPerks.includes('adventurers_guild');
 }
 
+function generateLuckyShop() {
+    state.shop = [];
+    var types = ['legendary_only', 'orbs_only', 'potions_only', 'same_rarity', 'free_item', 'essences'];
+    var luckyType = pick(types);
+    state._luckyShopType = luckyType;
+
+    switch (luckyType) {
+        case 'legendary_only': {
+            var legs = ITEMS.filter(function(i) { return i.rarity === 'legendary'; });
+            for (var i = 0; i < 5; i++) {
+                state.shop.push(createShopItem(pick(legs)));
+            }
+            break;
+        }
+        case 'orbs_only': {
+            for (var i = 0; i < 5; i++) {
+                state.shop.push(createShopOrb(pick(ORBS)));
+            }
+            break;
+        }
+        case 'potions_only': {
+            for (var i = 0; i < 7; i++) {
+                state.shop.push(createShopPotion(pick(POTIONS)));
+            }
+            break;
+        }
+        case 'same_rarity': {
+            var highestRarity = 'common';
+            var rarityOrder = ['common', 'rare', 'epic', 'legendary', 'relic'];
+            state.tower.forEach(function(item) {
+                var idx = rarityOrder.indexOf(item.rarity);
+                if (idx > rarityOrder.indexOf(highestRarity)) highestRarity = item.rarity;
+            });
+            var samePool = ITEMS.filter(function(i) { return i.rarity === highestRarity; });
+            if (samePool.length === 0) samePool = ITEMS.filter(function(i) { return i.rarity === 'rare'; });
+            for (var i = 0; i < 6; i++) {
+                state.shop.push(createShopItem(pick(samePool)));
+            }
+            break;
+        }
+        case 'free_item': {
+            var shopSize = state.selectedPerks.includes('expanded_stock') ? 9 : 7;
+            var rarityTable = LEVEL_RARITY_ACCESS[Math.min(state.level, 7)];
+            var pool = [];
+            for (var r in rarityTable) {
+                if (rarityTable[r] <= 0) continue;
+                var items = ITEMS.filter(function(it) { return it.rarity === r; });
+                for (var w = 0; w < rarityTable[r]; w++) pool = pool.concat(items);
+            }
+            while (state.shop.length < shopSize) {
+                state.shop.push(createShopItem(pick(pool)));
+            }
+            // Make one item free
+            var freeIdx = rand(0, state.shop.length - 1);
+            state.shop[freeIdx].cost = 0;
+            state.shop[freeIdx]._isFreeItem = true;
+            break;
+        }
+        case 'essences': {
+            for (var i = 0; i < 3; i++) {
+                state.shop.push(createShopEssence(pick(ESSENCES)));
+            }
+            var rarityTable2 = LEVEL_RARITY_ACCESS[Math.min(state.level, 7)];
+            var pool2 = [];
+            for (var r2 in rarityTable2) {
+                if (rarityTable2[r2] <= 0) continue;
+                var items2 = ITEMS.filter(function(it) { return it.rarity === r2; });
+                for (var w2 = 0; w2 < rarityTable2[r2]; w2++) pool2 = pool2.concat(items2);
+            }
+            for (var i = 0; i < 4; i++) {
+                state.shop.push(createShopItem(pick(pool2)));
+            }
+            break;
+        }
+    }
+}
+
+function reinsertDeepFrozen(previousDeepFrozen) {
+    previousDeepFrozen.forEach(function(frozenItem) {
+        if (Math.random() < 0.6) {
+            // Replace a random slot or add to end
+            frozenItem.deepFrozen = true;
+            if (state.shop.length > 0) {
+                var replaceIdx = rand(0, state.shop.length - 1);
+                state.shop[replaceIdx] = frozenItem;
+            } else {
+                state.shop.push(frozenItem);
+            }
+        }
+    });
+}
+
+function createShopCrystal(template) {
+    return { ...template, isCrystal: true, frozen: false, deepFrozen: false, uid: crypto.randomUUID() };
+}
+
+function createShopOrb(template) {
+    return { ...template, isOrb: true, frozen: false, deepFrozen: false, uid: crypto.randomUUID() };
+}
+
+function createShopEssence(template) {
+    return { ...template, isEssence: true, frozen: false, deepFrozen: false, uid: crypto.randomUUID() };
+}
+
 function createShopPotion(template) {
-    return { ...template, isPotion: true, frozen: false, uid: crypto.randomUUID() };
+    return { ...template, isPotion: true, frozen: false, deepFrozen: false, uid: crypto.randomUUID() };
 }
 
 function createShopItem(template) {
-    return { ...template, stars: 0, frozen: false, uid: crypto.randomUUID() };
+    return { ...template, stars: 0, frozen: false, deepFrozen: false, uid: crypto.randomUUID() };
 }
 
 function refreshShop() {
@@ -138,6 +282,80 @@ function refreshShop() {
 function freezeShop() {
     state.shopFrozen = !state.shopFrozen;
     state.shop.forEach(i => i.frozen = state.shopFrozen);
+}
+
+// === DEEP FREEZE ===
+function deepFreezeItem(shopIndex) {
+    var item = state.shop[shopIndex];
+    if (!item) return false;
+    item.deepFrozen = !item.deepFrozen;
+    return true;
+}
+
+// === CRYSTAL BUYING & SOCKETING ===
+function buyCrystal(shopIndex) {
+    var item = state.shop[shopIndex];
+    if (!item || !item.isCrystal) return false;
+    if (state.gold < item.cost) return false;
+    state.gold -= item.cost;
+    state.inventory.push({ ...item, uid: crypto.randomUUID() });
+    state.shop.splice(shopIndex, 1);
+    return true;
+}
+
+function socketCrystal(crystalIndex, towerIndex) {
+    var crystal = state.inventory[crystalIndex];
+    if (!crystal || !crystal.isCrystal) return false;
+    var item = state.tower[towerIndex];
+    if (!item) return false;
+    if (!item.crystals) item.crystals = [];
+    if (item.crystals.length >= 2) return { success: false, reason: 'Item already has max 2 crystals socketed.' };
+    item.crystals.push({ id: crystal.id, effectType: crystal.effectType, baseValue: crystal.baseValue, name: crystal.name });
+    state.inventory.splice(crystalIndex, 1);
+    return { success: true };
+}
+
+// === ORB BUYING ===
+function buyOrb(shopIndex) {
+    var item = state.shop[shopIndex];
+    if (!item || !item.isOrb) return false;
+    if (state.gold < item.cost) return false;
+    if (state.orbs.length >= 3) return false;
+    state.gold -= item.cost;
+    state.orbs.push({ ...item, uid: crypto.randomUUID() });
+    state.shop.splice(shopIndex, 1);
+    return true;
+}
+
+// === ESSENCE BUYING & APPLYING ===
+function buyEssence(shopIndex) {
+    var item = state.shop[shopIndex];
+    if (!item || !item.isEssence) return false;
+    if (state.gold < item.cost) return false;
+    state.gold -= item.cost;
+    state.inventory.push({ ...item, uid: crypto.randomUUID() });
+    state.shop.splice(shopIndex, 1);
+    return true;
+}
+
+function applyEssence(essenceIndex, towerIndex) {
+    var essence = state.inventory[essenceIndex];
+    if (!essence || !essence.isEssence) return false;
+    var item = state.tower[towerIndex];
+    if (!item) return false;
+    if (item.essence) return { success: false, reason: 'Item already has an essence applied.' };
+    item.essence = { id: essence.id, effectType: essence.effectType, effectValue: essence.effectValue, name: essence.name };
+    state.inventory.splice(essenceIndex, 1);
+    return { success: true };
+}
+
+// === LUCKY POTION USAGE ===
+function useLuckyPotion(potionIndex) {
+    var potion = state.inventory[potionIndex];
+    if (!potion || potion.effectType !== 'lucky_shop') return false;
+    state.nextShopLucky = true;
+    state.inventory.splice(potionIndex, 1);
+    return true;
 }
 
 
@@ -269,6 +487,9 @@ function applyPotion(potionIndex, towerIndex) {
             item.damage = Math.floor(item.damage * 1.25);
             item.multicast += 1;
             break;
+        case 'lucky_shop':
+            // Lucky Potion is used directly, not applied to an item
+            return { success: false, reason: 'Use Lucky Potion from inventory (click to use).' };
     }
 
     state.inventory.splice(potionIndex, 1);
@@ -438,6 +659,27 @@ function applyEncounterEffect(effect) {
             });
             break;
         }
+        case 'midasSellWeakest': {
+            if (state.tower.length > 0) {
+                var weakestIdx = 0;
+                var weakestCost = state.tower[0].cost;
+                for (var mi = 1; mi < state.tower.length; mi++) {
+                    if (state.tower[mi].cost < weakestCost) {
+                        weakestCost = state.tower[mi].cost;
+                        weakestIdx = mi;
+                    }
+                }
+                var goldGain = weakestCost * 3;
+                state.gold += goldGain;
+                state.tower.splice(weakestIdx, 1);
+            }
+            break;
+        }
+        case 'midasGoldRush': {
+            state.gold += 80;
+            state.hearts = Math.max(0, state.hearts - 1);
+            break;
+        }
     }
 }
 
@@ -560,6 +802,8 @@ function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
         log: [],
         done: false,
         winner: null,
+        _reviveUsed: false,
+        _thornsItems: [],
     };
     // Apply Core Crack to max HP
     function applyCoreCrack() {
@@ -568,6 +812,34 @@ function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
         combat.playerMaxHP = playerStartHP - combat.playerDebuffs.coreCrack;
         combat.playerHP = Math.min(combat.playerHP, combat.playerMaxHP);
     }
+
+    // Check for Doomsday Clock artifact
+    var hasDoomsdayClock = playerTower.some(function(i) { return i.id === 'doomsday_clock'; });
+    var MAX_TIME = hasDoomsdayClock ? 30 : 45;
+    if (hasDoomsdayClock) {
+        playerTower.forEach(function(item) {
+            if (item.cooldown > 0) {
+                item.damage = Math.floor(item.damage * 1.5);
+            }
+        });
+        combat.log.push('[player] Doomsday Clock: Combat time limit 30s. All items +50% damage!');
+    }
+
+    // Check for Heart of Ucliat (revive)
+    var hasRevive = playerTower.some(function(i) { return i.id === 'heart_of_ucliat'; });
+
+    // Apply crystal bonuses at start of combat
+    applyCrystalBonuses(playerTower, combat);
+
+    // Apply orb effects at start of combat
+    applyOrbStartEffects(playerTower, combat);
+
+    // Track thorns items
+    playerTower.forEach(function(item, idx) {
+        if (item.essence && item.essence.effectType === 'thorns') {
+            combat._thornsItems.push({ item: item, idx: idx });
+        }
+    });
 
     // Initialize cooldown timers
     const playerTimers = playerTower.map(item => ({
@@ -582,7 +854,6 @@ function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
     applyStartOfCombat(enemyTower, combat, 'enemy');
 
     const TICK = 0.1; // 100ms ticks
-    const MAX_TIME = 45; // 45 second max combat
     let tickCount = 0;
 
     function tick() {
@@ -596,18 +867,36 @@ function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
             applyCoreCrack();
         }
 
+        // Track HP before processing for thorns
+        var hpBeforePlayer = combat.playerHP;
+
         // Process player items
         processTimers(playerTimers, playerTower, combat, 'player');
         // Process enemy items
         processTimers(enemyTimers, enemyTower, combat, 'enemy');
+
+        // Thorns: if player took damage this tick, fire thorns items
+        var damageTaken = hpBeforePlayer - combat.playerHP;
+        if (damageTaken > 0 && combat._thornsItems.length > 0) {
+            combat._thornsItems.forEach(function(ti) {
+                fireItem(ti.item, ti.idx, playerTower, combat, 'player');
+            });
+        }
 
         // Check win conditions
         if (combat.enemyHP <= 0) {
             combat.done = true;
             combat.winner = 'player';
         } else if (combat.playerHP <= 0) {
-            combat.done = true;
-            combat.winner = 'enemy';
+            // Check revive (Heart of Ucliat)
+            if (hasRevive && !combat._reviveUsed) {
+                combat._reviveUsed = true;
+                combat.playerHP = 1;
+                combat.log.push('[player] Heart of Ucliat: REVIVED with 1 HP!');
+            } else {
+                combat.done = true;
+                combat.winner = 'enemy';
+            }
         } else if (combat.time >= MAX_TIME) {
             combat.done = true;
             combat.winner = combat.playerHP >= combat.enemyHP ? 'player' : 'enemy';
@@ -618,6 +907,82 @@ function simulateCombat(playerTower, enemyTower, onTick, onEnd) {
     }
 
     return { combat, tick, TICK, playerTimers, enemyTimers };
+}
+
+// === CRYSTAL COMBAT BONUSES ===
+function applyCrystalBonuses(playerTower, combat) {
+    var manaCount = playerTower.filter(function(i) { return i.pack === 'mana'; }).length;
+    var churchCount = playerTower.filter(function(i) { return i.pack === 'church'; }).length;
+    var darkCount = playerTower.filter(function(i) { return i.pack === 'dark'; }).length;
+    var gorthonCount = playerTower.filter(function(i) { return i.pack === 'gorthon'; }).length;
+    var totalItems = playerTower.length;
+
+    playerTower.forEach(function(item) {
+        if (!item.crystals || item.crystals.length === 0) return;
+        item.crystals.forEach(function(crystal) {
+            switch (crystal.effectType) {
+                case 'mana_scaling_dmg':
+                    var bonus = crystal.baseValue * manaCount;
+                    item.damage += bonus;
+                    if (bonus > 0) combat.log.push('[player] ' + crystal.name + ': +' + bonus + ' dmg to ' + item.name);
+                    break;
+                case 'item_count_mc':
+                    var mcBonus = crystal.baseValue * Math.floor(totalItems / 3);
+                    item.multicast += mcBonus;
+                    if (mcBonus > 0) combat.log.push('[player] ' + crystal.name + ': +' + mcBonus + ' MC to ' + item.name);
+                    break;
+                case 'church_scaling_heal':
+                    var healBonus = crystal.baseValue * churchCount;
+                    item.healOnTrigger = (item.healOnTrigger || 0) + healBonus;
+                    if (healBonus > 0) combat.log.push('[player] ' + crystal.name + ': +' + healBonus + ' heal to ' + item.name);
+                    break;
+                case 'dark_scaling_poison':
+                    var poisonBonus = crystal.baseValue * darkCount;
+                    item.poisonOnTrigger = (item.poisonOnTrigger || 0) + poisonBonus;
+                    if (poisonBonus > 0) combat.log.push('[player] ' + crystal.name + ': +' + poisonBonus + ' poison to ' + item.name);
+                    break;
+                case 'gorthon_scaling_cd':
+                    var cdBonus = crystal.baseValue * gorthonCount;
+                    if (item.cooldown > 0.3) {
+                        item.cooldown = Math.max(0.3, item.cooldown - cdBonus);
+                        if (cdBonus > 0) combat.log.push('[player] ' + crystal.name + ': -' + cdBonus.toFixed(1) + 's CD to ' + item.name);
+                    }
+                    break;
+            }
+        });
+    });
+}
+
+// === ORB COMBAT EFFECTS ===
+function applyOrbStartEffects(playerTower, combat) {
+    if (!state.orbs || state.orbs.length === 0) return;
+    state.orbs.forEach(function(orb) {
+        switch (orb.effect) {
+            case 'all_dmg_3':
+                playerTower.forEach(function(item) { item.damage += 3; });
+                combat.log.push('[player] ' + orb.name + ': All items +3 damage');
+                break;
+            case 'all_cd_02':
+                playerTower.forEach(function(item) {
+                    if (item.cooldown > 0.3) item.cooldown = Math.max(0.3, item.cooldown - 0.2);
+                });
+                combat.log.push('[player] ' + orb.name + ': All items -0.2s cooldown');
+                break;
+            case 'start_poison_5':
+                combat.enemyDebuffs.poison += 5;
+                combat.log.push('[player] ' + orb.name + ': Applied 5 Mana Poison to enemy');
+                break;
+            case 'start_shield_100':
+                combat.playerShield += 100;
+                combat.log.push('[player] ' + orb.name + ': +100 Shield');
+                break;
+            case 'all_mc_1':
+                playerTower.forEach(function(item) { item.multicast += 1; });
+                combat.log.push('[player] ' + orb.name + ': All items +1 multicast');
+                break;
+            // regen_30 is handled in applyDots
+        }
+    });
 }
 
 
@@ -695,6 +1060,15 @@ function fireItem(item, idx, tower, combat, side) {
     let isCrit = Math.random() * 100 < item.crit;
     if (isCrit) dmg = Math.floor(dmg * 1.5);
 
+    // Essence: Execute — 2x damage when enemy below 30% HP
+    if (item.essence && item.essence.effectType === 'execute') {
+        var targetHP = isPlayer ? combat.enemyHP : combat.playerHP;
+        var targetMaxHP = isPlayer ? combat.enemyMaxHP : combat.playerMaxHP;
+        if (targetHP < targetMaxHP * 0.3) {
+            dmg = Math.floor(dmg * item.essence.effectValue);
+        }
+    }
+
     // Ability-based bonus damage
     const ab = item.ability.toLowerCase();
     if (ab.includes('per other') && ab.includes('bow')) {
@@ -729,6 +1103,14 @@ function fireItem(item, idx, tower, combat, side) {
         }
         const critStr = isCrit ? ' CRIT!' : '';
         combat.log.push(`[${side}] ${item.name} deals ${dmg + (isCrit ? Math.floor(item.damage*0.5) : 0)} dmg${critStr}`);
+
+        // Essence: Lifesteal — heal 20% of damage dealt
+        if (item.essence && item.essence.effectType === 'lifesteal' && dmg > 0) {
+            var healAmt = Math.floor(dmg * item.essence.effectValue);
+            if (isPlayer) combat.playerHP = Math.min(combat.playerMaxHP, combat.playerHP + healAmt);
+            else combat.enemyHP = Math.min(combat.enemyMaxHP, combat.enemyHP + healAmt);
+            if (healAmt > 0) combat.log.push(`[${side}] ${item.name} lifesteals ${healAmt} HP`);
+        }
     }
 
     // Apply debuffs
@@ -910,6 +1292,23 @@ function fireItem(item, idx, tower, combat, side) {
                     combat.log.push(`[${side}] ${item.name} gained +1 multicast (every 3rd trigger)!`);
                 }
                 break;
+            case 'infinity_loop':
+                item.damage += 1;
+                item.multicast += 1;
+                item.crit += 1;
+                combat.log.push(`[${side}] ${item.name} gained +1 damage, +1 multicast, +1% crit!`);
+                break;
+        }
+    }
+
+    // Essence: Chain Below — trigger the item below this one
+    if (item.essence && item.essence.effectType === 'chain_below' && isPlayer) {
+        if (idx + 1 < tower.length) {
+            var belowItem = tower[idx + 1];
+            if (belowItem.cooldown > 0) {
+                fireItem(belowItem, idx + 1, tower, combat, side);
+                combat.log.push(`[${side}] ${item.name} chains into ${belowItem.name}!`);
+            }
         }
     }
 }
@@ -935,6 +1334,13 @@ function applyDots(combat) {
     }
     if (combat.enemyDebuffs.burn > 0) {
         combat.enemyHP -= combat.enemyDebuffs.burn;
+    }
+    // Orb of Mending: heal 3 HP per tick (30/sec) — called every 1s (10 ticks)
+    if (state.orbs && state.orbs.length > 0) {
+        var hasMending = state.orbs.some(function(o) { return o.effect === 'regen_30'; });
+        if (hasMending) {
+            combat.playerHP = Math.min(combat.playerMaxHP, combat.playerHP + 30);
+        }
     }
 }
 
