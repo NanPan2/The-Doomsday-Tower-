@@ -82,7 +82,8 @@
                 </div>
                 <div class="inventory-section">
                     <h3>Potions & Vials</h3>
-                    <div class="inventory-hint">Drag potions onto tower items to apply buffs</div>
+                    <div class="inventory-hint">Click a potion to apply it, or drag it onto a tower item.</div>
+                    <div id="potion-selection-status" class="potion-selection-status hidden"></div>
                     <div id="inventory-slots" class="inventory-grid"></div>
                 </div>
                 <div id="hp-drop-target" class="hp-drop-zone">
@@ -139,7 +140,10 @@
                 <div class="result-container">
                     <h2 id="result-title"></h2>
                     <p id="result-detail"></p>
-                    <div id="xp-gain-display" class="xp-gain-display hidden"></div>
+                    <div class="result-rewards">
+                        <div id="xp-gain-display" class="xp-gain-display hidden"></div>
+                        <div id="gold-gain-display" class="gold-gain-display hidden"></div>
+                    </div>
                     <div id="endless-choice" class="endless-choice hidden">
                         <p class="endless-choice-text">You have won 10 combats! Choose your path:</p>
                         <button id="btn-end-run" class="btn btn-primary">End Run</button>

@@ -115,6 +115,31 @@ function screenShake() {
     setTimeout(() => app.classList.remove('screen-shake'), 300);
 }
 
+// === POTION REJECTION NOTIFICATION ===
+function showRejectNotification(element, message) {
+    if (!element) return;
+    var rect = element.getBoundingClientRect();
+    var el = document.createElement('div');
+    el.className = 'potion-reject-notification';
+    el.textContent = message;
+    el.style.left = (rect.left + rect.width / 2) + 'px';
+    el.style.top = (rect.top - 5) + 'px';
+    el.style.transform = 'translateX(-50%)';
+    $('damage-numbers').appendChild(el);
+    setTimeout(function() { el.remove(); }, 2600);
+}
+
+// === EFFECTIVE VALUE CALCULATION ===
+function getItemEffectiveValue(item) {
+    var val = item.cost
+        + (item.healOnTrigger || 0) * 3
+        + (item.poisonOnTrigger || 0) * 5
+        + (item.burnOnTrigger || 0) * 5
+        + (item.shieldOnTrigger || 0) * 3
+        + item.stars * 15;
+    return val;
+}
+
 
 // === SCREEN MANAGEMENT ===
 function showScreen(name) {
@@ -145,14 +170,14 @@ function updateHUD() {
         hearts += i < state.hearts ? '❤️' : '🖤';
     }
     $('hud-hearts').textContent = hearts;
-    // XP bar
-    var xpNeeded = state.level < 7 ? XP_THRESHOLDS[state.level] : 0;
-    var xpPct = xpNeeded > 0 ? Math.min(100, (state.xp / xpNeeded) * 100) : 100;
+    // XP bar (cumulative semantics, level cap = MAX_LEVEL = 100)
+    var xpB = getXPLevelBounds();
+    var xpPct = xpB.perLevel > 0 ? Math.min(100, (xpB.inLevel / xpB.perLevel) * 100) : 100;
     $('hud-xp-bar').style.width = xpPct + '%';
-    if (state.level >= 7) {
+    if (state.level >= MAX_LEVEL) {
         $('hud-xp-text').textContent = 'MAX LEVEL';
     } else {
-        $('hud-xp-text').textContent = 'XP: ' + state.xp + '/' + xpNeeded;
+        $('hud-xp-text').textContent = 'XP: ' + xpB.inLevel + '/' + xpB.perLevel;
     }
 }
 
@@ -170,8 +195,49 @@ function renderItemCard(item, clickHandler, showCost) {
     var packColor = PACKS[item.pack] ? PACKS[item.pack].color : '#888';
     var packName = PACKS[item.pack] ? PACKS[item.pack].name : item.pack;
 
+    // Effective value for tower view (not shop)
+    var valueHtml = '';
+    if (!showCost) {
+        var effVal = getItemEffectiveValue(item);
+        valueHtml = '<span class="item-value">Val: ' + effVal + '</span>';
+    }
+
+    // Buff badges for tower view
+    var buffsHtml = '';
+    if (!showCost) {
+        var badges = [];
+        if (item.healOnTrigger && item.healOnTrigger > 0) {
+            badges.push('<span class="item-buff-badge buff-heal">+' + item.healOnTrigger + ' heal</span>');
+        }
+        if (item.poisonOnTrigger && item.poisonOnTrigger > 0) {
+            badges.push('<span class="item-buff-badge buff-poison">+' + item.poisonOnTrigger + ' poison</span>');
+        }
+        if (item.burnOnTrigger && item.burnOnTrigger > 0) {
+            badges.push('<span class="item-buff-badge buff-burn">+' + item.burnOnTrigger + ' burn</span>');
+        }
+        if (item.shieldOnTrigger && item.shieldOnTrigger > 0) {
+            badges.push('<span class="item-buff-badge buff-shield">+' + item.shieldOnTrigger + ' shield</span>');
+        }
+        if (item._cdReduced && item._cdReduced > 0) {
+            badges.push('<span class="item-buff-badge buff-cd">-' + item._cdReduced.toFixed(1) + 's CD</span>');
+        }
+        if (item._potionDmg && item._potionDmg > 0) {
+            badges.push('<span class="item-buff-badge buff-dmg">+' + item._potionDmg + ' DMG</span>');
+        }
+        if (item._potionCrit && item._potionCrit > 0) {
+            badges.push('<span class="item-buff-badge buff-crit">+' + item._potionCrit + '% crit</span>');
+        }
+        if (item._potionMC && item._potionMC > 0) {
+            badges.push('<span class="item-buff-badge buff-mc">+' + item._potionMC + ' MC</span>');
+        }
+        if (badges.length > 0) {
+            buffsHtml = '<div class="item-buffs">' + badges.join('') + '</div>';
+        }
+    }
+
     card.innerHTML =
         (showCost ? '<span class="item-cost">' + item.cost + 'g</span>' : '') +
+        valueHtml +
         '<div class="card-icon-area">' +
             '<div class="card-pack-bg">' + createSVGUse(packIcon, 52, 52, packColor) + '</div>' +
             createSVGUse(tagIcon, 32, 32, iconColor) +
@@ -185,6 +251,7 @@ function renderItemCard(item, clickHandler, showCost) {
             '</div>' +
             '<div class="item-pack-badge" style="color:' + packColor + ';border-color:' + packColor + '40">' + packName + '</div>' +
             '<div class="item-ability">' + item.ability + '</div>' +
+            buffsHtml +
         '</div>';
 
     if (item.frozen) card.classList.add('frozen');
@@ -285,21 +352,50 @@ function renderPotionCard(potion, clickHandler, showCost) {
     return card;
 }
 
-// === INVENTORY RENDERING (Drag & Drop) ===
+// === INVENTORY RENDERING (Drag & Drop + Click-to-Apply) ===
 function renderInventory() {
     var grid = $('inventory-slots');
     if (!grid) return;
     grid.innerHTML = '';
+
+    // Validate selection still points at a real potion
+    if (state._selectedPotionIdx != null) {
+        var sel = state.inventory[state._selectedPotionIdx];
+        if (!sel || (state._selectedPotionId && sel.id !== state._selectedPotionId)) {
+            // Try to recover by id, otherwise clear selection
+            var fallbackIdx = -1;
+            if (state._selectedPotionId) {
+                for (var fi = 0; fi < state.inventory.length; fi++) {
+                    if (state.inventory[fi].id === state._selectedPotionId) {
+                        fallbackIdx = fi;
+                        break;
+                    }
+                }
+            }
+            if (fallbackIdx >= 0) state._selectedPotionIdx = fallbackIdx;
+            else clearPotionSelection();
+        }
+    }
+
     if (state.inventory.length === 0) {
         grid.innerHTML = '<div class="inventory-empty">No potions. Buy them from the shop!</div>';
+        clearPotionSelection();
+        renderPotionSelectionStatus();
         return;
     }
+
     state.inventory.forEach(function(potion, idx) {
         var card = document.createElement('div');
         card.className = 'potion-card potion-inventory-card';
         card.draggable = true;
         card.setAttribute('data-potion-index', idx);
         card.style.borderColor = potion.color || '#aa44ff';
+
+        // Highlight every potion of the currently-selected type
+        if (state._selectedPotionId && potion.id === state._selectedPotionId) {
+            card.classList.add('potion-selected');
+        }
+
         card.innerHTML =
             '<div class="potion-card-icon" style="background:' + (potion.color || '#aa44ff') + '22">' +
                 '<span class="potion-emoji">🧪</span>' +
@@ -308,6 +404,20 @@ function renderInventory() {
                 '<div class="potion-card-name" style="color:' + (potion.color || '#aa44ff') + '">' + potion.name + '</div>' +
                 '<div class="potion-card-desc">' + potion.desc + '</div>' +
             '</div>';
+
+        // Click to toggle selection (does NOT prevent drag)
+        card.addEventListener('click', function(e) {
+            // If user is mid-drag this won't fire; click only fires after a click without drag
+            if (state._selectedPotionIdx === idx) {
+                clearPotionSelection();
+            } else {
+                selectPotion(idx);
+            }
+            renderInventory();
+            renderTower();
+            renderPotionSelectionStatus();
+            updateClickableHighlights();
+        });
 
         // Drag start
         card.addEventListener('dragstart', function(e) {
@@ -325,6 +435,110 @@ function renderInventory() {
         });
         grid.appendChild(card);
     });
+
+    renderPotionSelectionStatus();
+    updateClickableHighlights();
+}
+
+// === POTION SELECTION (click-to-apply mode) ===
+function selectPotion(idx) {
+    var potion = state.inventory[idx];
+    if (!potion) {
+        clearPotionSelection();
+        return;
+    }
+    state._selectedPotionIdx = idx;
+    state._selectedPotionId = potion.id;
+}
+
+function clearPotionSelection() {
+    state._selectedPotionIdx = null;
+    state._selectedPotionId = null;
+}
+
+function renderPotionSelectionStatus() {
+    var bar = $('potion-selection-status');
+    if (!bar) return;
+    if (state._selectedPotionIdx == null) {
+        bar.classList.add('hidden');
+        bar.textContent = '';
+        return;
+    }
+    var potion = state.inventory[state._selectedPotionIdx];
+    if (!potion) {
+        bar.classList.add('hidden');
+        return;
+    }
+    bar.classList.remove('hidden');
+    var target = (potion.effectType === 'maxhp')
+        ? 'the HP zone'
+        : 'a tower item';
+    bar.textContent = 'Click ' + target + ' to apply ' + potion.name +
+        '. Press ESC or right-click to cancel.';
+}
+
+// Mark tower items / HP drop zone as clickable when a potion is selected.
+function updateClickableHighlights() {
+    var towerCards = document.querySelectorAll('#tower-slots .item-card');
+    towerCards.forEach(function(el) { el.classList.remove('tower-item-clickable'); });
+    var hpZone = $('hp-drop-target');
+    if (hpZone) {
+        hpZone.classList.remove('tower-item-clickable');
+        // Always reset inline display so the .hp-drop-zone CSS rule (display:none)
+        // hides it again when no Health Vial is selected.
+        hpZone.style.removeProperty('display');
+    }
+
+    if (state._selectedPotionIdx == null) return;
+    var potion = state.inventory[state._selectedPotionIdx];
+    if (!potion) return;
+
+    if (potion.effectType === 'maxhp') {
+        if (hpZone) {
+            hpZone.classList.add('tower-item-clickable');
+            // Force the HP zone visible so the user can click it.
+            hpZone.style.display = 'block';
+        }
+    } else {
+        towerCards.forEach(function(el) { el.classList.add('tower-item-clickable'); });
+    }
+}
+
+// Apply the currently-selected potion to a target. After applying, attempt to
+// re-select another potion of the same id so the user can rapidly click items.
+function applySelectedPotion(towerIndex) {
+    if (state._selectedPotionIdx == null) return false;
+    var potion = state.inventory[state._selectedPotionIdx];
+    if (!potion) {
+        clearPotionSelection();
+        return false;
+    }
+    var sameId = potion.id;
+    var result = applyPotion(state._selectedPotionIdx, towerIndex);
+    if (result && result.success === false && result.reason) {
+        // Return the rejection info so caller can display notification
+        return result;
+    }
+    if (!result || (result && !result.success)) return false;
+
+    // Find another potion of the same type and select it; otherwise clear.
+    var nextIdx = -1;
+    for (var i = 0; i < state.inventory.length; i++) {
+        if (state.inventory[i].id === sameId) {
+            nextIdx = i;
+            break;
+        }
+    }
+    if (nextIdx >= 0) {
+        state._selectedPotionIdx = nextIdx;
+        state._selectedPotionId = sameId;
+    } else {
+        clearPotionSelection();
+        // Hide HP zone if we were showing it for a Health Vial selection
+        var hpZone = $('hp-drop-target');
+        if (hpZone) hpZone.style.removeProperty('display');
+    }
+    return true;
 }
 
 function highlightDropTargets(potion) {
@@ -363,7 +577,12 @@ function setupTowerDropTargets() {
         var towerCards = Array.from(grid.querySelectorAll('.item-card'));
         var towerIndex = towerCards.indexOf(target);
         if (towerIndex < 0) return;
-        if (applyPotion(potionIndex, towerIndex)) {
+        var result = applyPotion(potionIndex, towerIndex);
+        if (result && result.success === false && result.reason) {
+            showRejectNotification(target, result.reason);
+            return;
+        }
+        if (result && result.success) {
             showPotionAppliedEffect(target);
             renderTower();
             renderInventory();
@@ -385,11 +604,27 @@ function setupTowerDropTargets() {
             if (isNaN(potionIndex)) return;
             var potion = state.inventory[potionIndex];
             if (potion && potion.effectType === 'maxhp') {
-                if (applyPotion(potionIndex, -1)) {
+                var result = applyPotion(potionIndex, -1);
+                if (result && result.success) {
                     showPotionAppliedEffect(hpTarget);
                     renderInventory();
                     updateHUD();
                 }
+            }
+        });
+        // Click-to-apply: only fires when a Health Vial is selected.
+        hpTarget.addEventListener('click', function(e) {
+            if (state._selectedPotionIdx == null) return;
+            var sel = state.inventory[state._selectedPotionIdx];
+            if (!sel || sel.effectType !== 'maxhp') return;
+            var applyResult = applySelectedPotion(-1);
+            if (applyResult === true) {
+                showPotionAppliedEffect(hpTarget);
+                renderInventory();
+                renderTower();
+                updateHUD();
+                renderPotionSelectionStatus();
+                updateClickableHighlights();
             }
         });
     }
@@ -409,7 +644,29 @@ function renderTower() {
         if (i < state.tower.length) {
             var item = state.tower[i];
             (function(idx, itm) {
+                // The item-card click handler dispatches based on whether a
+                // potion is currently selected: apply potion, otherwise sell.
                 var card = renderItemCard(itm, function() {
+                    if (state._selectedPotionIdx != null) {
+                        var sel = state.inventory[state._selectedPotionIdx];
+                        // Health Vials don't apply to tower items; ignore the click.
+                        if (sel && sel.effectType === 'maxhp') return;
+                        var applyResult = applySelectedPotion(idx);
+                        if (applyResult && applyResult.success === false && applyResult.reason) {
+                            showRejectNotification(card, applyResult.reason);
+                            return;
+                        }
+                        if (applyResult === true) {
+                            showPotionAppliedEffect(card);
+                            renderTower();
+                            renderInventory();
+                            renderShop();
+                            updateHUD();
+                            renderPotionSelectionStatus();
+                            updateClickableHighlights();
+                        }
+                        return;
+                    }
                     if (confirm('Sell ' + itm.name + ' for ' + Math.floor(itm.cost * 0.5) + 'g?')) {
                         sellItem(idx);
                         renderTower();
@@ -433,7 +690,12 @@ function renderTower() {
                     card.classList.remove('tower-item-drop-target');
                     var potionIndex = parseInt(e.dataTransfer.getData('text/plain'));
                     if (isNaN(potionIndex)) return;
-                    if (applyPotion(potionIndex, idx)) {
+                    var result = applyPotion(potionIndex, idx);
+                    if (result && result.success === false && result.reason) {
+                        showRejectNotification(card, result.reason);
+                        return;
+                    }
+                    if (result && result.success) {
                         showPotionAppliedEffect(card);
                         renderTower();
                         renderInventory();
@@ -450,6 +712,8 @@ function renderTower() {
             grid.appendChild(slot);
         }
     }
+    // Re-mark the new tower cards as clickable if a potion is selected
+    updateClickableHighlights();
 }
 
 // === ENCOUNTER RENDERING ===
@@ -494,6 +758,8 @@ var currentCombatObj = null;
 var currentTICK = 0;
 
 function startCombat() {
+    // Clear any active potion selection before entering combat (transient state)
+    clearPotionSelection();
     showPhase('combat');
     var enemyTower = generateOpponent();
     var playerTower = state.tower.map(function(i) { return Object.assign({}, i); });
@@ -687,34 +953,71 @@ function updateCombatUI(combat, playerTimers, enemyTimers, playerTower, enemyTow
 function endCombat(combat) {
     showPhase('result');
     var won = combat.winner === 'player';
+
+    // === Damage-dealt percentage (used for XP bonus and gold reward) ===
+    var maxHp = combat.enemyMaxHP > 0 ? combat.enemyMaxHP : 1;
+    var hpRemaining = Math.max(0, combat.enemyHP);
+    var damageDealtPercent = Math.max(0, Math.min(1, (maxHp - hpRemaining) / maxHp));
+    var damageDealtPctDisplay = Math.round(damageDealtPercent * 100);
+
+    // === XP gain ===
+    // Win: 12 base + up to 8 bonus from damage. Loss: 5 base + up to 8 bonus.
+    var bonusXP = Math.floor(damageDealtPercent * 8);
     var xpGained = 0;
+    var goldReward = 0;
+
     if (won) {
         state.wins++;
         if (state.endless) state.endlessDay++;
-        xpGained = 8;
-        addXP(8);
+        xpGained = 12 + bonusXP;
+        goldReward = 15 + Math.floor(damageDealtPercent * 35); // 15-50
+        addXP(xpGained);
+        state.gold += goldReward;
         $('result-title').textContent = '⚔️ VICTORY!';
         $('result-title').style.color = '#44ee77';
+        var summary;
         if (state.endless) {
-            $('result-detail').textContent = 'Your tower overwhelmed the enemy! Days survived: ' + state.endlessDay;
+            summary = 'Your tower overwhelmed the enemy! Days survived: ' + state.endlessDay;
         } else {
-            $('result-detail').textContent = 'Your tower overwhelmed the enemy! Wins: ' + state.wins + '/10';
+            summary = 'Your tower overwhelmed the enemy! Wins: ' + state.wins + '/10';
         }
+        summary += '\nDamage dealt: ' + damageDealtPctDisplay + '%';
+        summary += '\nReward: +' + goldReward + ' gold, +' + xpGained + ' XP';
+        $('result-detail').textContent = summary;
     } else {
-        xpGained = 3;
-        addXP(3);
+        xpGained = 5 + bonusXP;
+        goldReward = Math.floor(damageDealtPercent * 20); // 0-20
+        addXP(xpGained);
+        state.gold += goldReward;
         if (state.endless) state.endlessDay++;
         var heartsLost = getHeartsLost();
         state.hearts = Math.max(0, state.hearts - heartsLost);
         $('result-title').textContent = '💀 DEFEAT';
         $('result-title').style.color = '#ff4444';
-        $('result-detail').textContent = 'You lost ' + heartsLost + ' heart(s). Hearts remaining: ' + state.hearts;
+        var lossSummary = 'You lost ' + heartsLost + ' heart(s). Hearts remaining: ' + state.hearts;
+        lossSummary += '\nDamage dealt: ' + damageDealtPctDisplay + '%';
+        lossSummary += '\nReward: +' + goldReward + ' gold, +' + xpGained + ' XP';
+        $('result-detail').textContent = lossSummary;
     }
-    // Show XP gain
+
+    // === Floating displays: +XP and +Gold side by side ===
     var xpDisplay = $('xp-gain-display');
     xpDisplay.textContent = '+' + xpGained + ' XP!';
     xpDisplay.classList.remove('hidden');
-    setTimeout(function() { xpDisplay.classList.add('hidden'); }, 3000);
+
+    var goldDisplay = $('gold-gain-display');
+    if (goldDisplay) {
+        if (goldReward > 0) {
+            goldDisplay.textContent = '+' + goldReward + ' Gold!';
+            goldDisplay.classList.remove('hidden');
+        } else {
+            goldDisplay.classList.add('hidden');
+        }
+    }
+    setTimeout(function() {
+        xpDisplay.classList.add('hidden');
+        if (goldDisplay) goldDisplay.classList.add('hidden');
+    }, 3000);
 
     // Show potion generation notifications
     if (state.potionGenerationQueue.length > 0) {
@@ -788,6 +1091,7 @@ function showGameOver(won) {
 
 // === NEXT DAY ===
 function nextDay() {
+    clearPotionSelection();
     startNewDay();
     updateHUD();
     var encounter = getEncounterForDay(state.day);
@@ -1268,10 +1572,28 @@ function init() {
             closeSlotsModal();
         } else if (!$('game-menu').classList.contains('hidden')) {
             closeMenu();
+        } else if (state._selectedPotionIdx != null) {
+            // Clear potion selection before opening the menu
+            clearPotionSelection();
+            renderInventory();
+            renderTower();
+            renderPotionSelectionStatus();
+            updateClickableHighlights();
         } else if (screens.game.classList.contains('active')) {
             // Quick-open the menu while in game
             openMenu();
         }
+    });
+
+    // Right-click anywhere clears the active potion selection
+    document.addEventListener('contextmenu', function(e) {
+        if (state._selectedPotionIdx == null) return;
+        e.preventDefault();
+        clearPotionSelection();
+        renderInventory();
+        renderTower();
+        renderPotionSelectionStatus();
+        updateClickableHighlights();
     });
 }
 
