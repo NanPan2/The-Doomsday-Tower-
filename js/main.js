@@ -549,10 +549,28 @@ function renderInventory() {
         return;
     }
 
-    state.inventory.forEach(function(potion, idx) {
+    // Group inventory by item id
+    var grouped = {};
+    var groupOrder = [];
+    state.inventory.forEach(function(item, idx) {
+        var key = item.id;
+        if (!grouped[key]) {
+            grouped[key] = { item: item, indices: [idx], count: 1 };
+            groupOrder.push(key);
+        } else {
+            grouped[key].indices.push(idx);
+            grouped[key].count++;
+        }
+    });
+
+    groupOrder.forEach(function(key) {
+        var group = grouped[key];
+        var potion = group.item;
+        var firstIdx = group.indices[0];
+
         var card = document.createElement('div');
         card.draggable = true;
-        card.setAttribute('data-potion-index', idx);
+        card.setAttribute('data-potion-index', firstIdx);
 
         // Determine card type
         if (potion.isCrystal) {
@@ -590,15 +608,27 @@ function renderInventory() {
                 '</div>';
         }
 
-        // Highlight every potion of the currently-selected type
+        // Add quantity badge if count > 1
+        if (group.count > 1) {
+            var badge = document.createElement('span');
+            badge.className = 'potion-quantity-badge';
+            badge.textContent = 'x' + group.count;
+            card.appendChild(badge);
+        }
+
+        // Highlight entire group card if this type is currently selected
         if (state._selectedPotionId && potion.id === state._selectedPotionId) {
             card.classList.add('potion-selected');
         }
 
         // Click to toggle selection or use directly
         card.addEventListener('click', function(e) {
+            var idx = group.indices[0];
+            var currentPotion = state.inventory[idx];
+            if (!currentPotion) return;
+
             // Lucky Potion: use directly without target
-            if (potion.effectType === 'lucky_shop') {
+            if (currentPotion.effectType === 'lucky_shop') {
                 if (confirm('Use Lucky Potion? Next shop will be curated.')) {
                     useLuckyPotion(idx);
                     renderInventory();
@@ -607,8 +637,8 @@ function renderInventory() {
                 return;
             }
             // Crystal: select for socketing
-            if (potion.isCrystal) {
-                if (state._selectedPotionIdx === idx) {
+            if (currentPotion.isCrystal) {
+                if (state._selectedPotionId === currentPotion.id) {
                     clearPotionSelection();
                 } else {
                     selectPotion(idx);
@@ -620,8 +650,8 @@ function renderInventory() {
                 return;
             }
             // Essence: select for applying
-            if (potion.isEssence) {
-                if (state._selectedPotionIdx === idx) {
+            if (currentPotion.isEssence) {
+                if (state._selectedPotionId === currentPotion.id) {
                     clearPotionSelection();
                 } else {
                     selectPotion(idx);
@@ -633,7 +663,7 @@ function renderInventory() {
                 return;
             }
             // Normal potion selection
-            if (state._selectedPotionIdx === idx) {
+            if (state._selectedPotionId === currentPotion.id) {
                 clearPotionSelection();
             } else {
                 selectPotion(idx);
@@ -644,8 +674,9 @@ function renderInventory() {
             updateClickableHighlights();
         });
 
-        // Drag start
+        // Drag start — use first available index of this group
         card.addEventListener('dragstart', function(e) {
+            var idx = group.indices[0];
             e.dataTransfer.setData('text/plain', idx.toString());
             e.dataTransfer.effectAllowed = 'move';
             card.classList.add('dragging');
