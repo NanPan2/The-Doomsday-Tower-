@@ -1061,7 +1061,8 @@ function processTimers(timers, tower, combat, side) {
         if (t.elapsed >= t.cd) {
             t.elapsed = 0;
             t.triggered = true;
-            const multicast = Math.max(1, t.item.multicast);
+            // Cap multicast at 50 to prevent infinite loops and instant-kills
+            const multicast = Math.min(50, Math.max(1, t.item.multicast));
             for (let m = 0; m < multicast; m++) {
                 fireItem(t.item, idx, tower, combat, side);
             }

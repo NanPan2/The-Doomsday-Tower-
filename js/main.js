@@ -1077,6 +1077,7 @@ var currentTICK = 0;
 function startCombat() {
     // Clear any active potion selection before entering combat (transient state)
     clearPotionSelection();
+    _combatEnded = false; // Reset the guard
     showPhase('combat');
     var enemyTower = generateOpponent();
     var playerTower = state.tower.map(function(i) { return Object.assign({}, i); });
@@ -1106,6 +1107,11 @@ function startCombat() {
 
     // Set active speed button
     updateSpeedButtons();
+
+    // If combat already ended instantly (extreme multicast), skip the interval
+    if (combat.done) {
+        return;
+    }
 
     combatInterval = setInterval(function() {
         tick();
@@ -1267,7 +1273,20 @@ function updateCombatUI(combat, playerTimers, enemyTimers, playerTower, enemyTow
 }
 
 
+// Guard against endCombat being called multiple times
+var _combatEnded = false;
+
 function endCombat(combat) {
+    // Prevent double-calling (happens with instant kills from extreme multicast)
+    if (_combatEnded) return;
+    _combatEnded = true;
+
+    // Clean up any lingering interval
+    if (combatInterval) {
+        clearInterval(combatInterval);
+        combatInterval = null;
+    }
+
     showPhase('result');
     var won = combat.winner === 'player';
 
@@ -1408,6 +1427,15 @@ function showGameOver(won) {
 
 // === NEXT DAY ===
 function nextDay() {
+    // Safety: ensure we're not stuck in result/combat phase
+    if (combatInterval) {
+        clearInterval(combatInterval);
+        combatInterval = null;
+    }
+    _combatEnded = false;
+    currentCombatObj = null;
+    currentCombatTick = null;
+
     clearPotionSelection();
     startNewDay();
     updateHUD();
