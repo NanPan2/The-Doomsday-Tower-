@@ -478,7 +478,22 @@ function applyPotion(potionIndex, towerIndex) {
             if (sameRarity.length > 0) {
                 var newItem = pick(sameRarity);
                 var morphed = createShopItem(newItem);
+                // Keep all accumulated stats/buffs from the original item
                 morphed.stars = item.stars;
+                morphed.damage = item.damage;
+                morphed.cooldown = item.cooldown;
+                morphed.crit = item.crit;
+                morphed.multicast = item.multicast;
+                morphed.healOnTrigger = item.healOnTrigger || 0;
+                morphed.poisonOnTrigger = item.poisonOnTrigger || 0;
+                morphed.burnOnTrigger = item.burnOnTrigger || 0;
+                morphed.shieldOnTrigger = item.shieldOnTrigger || 0;
+                morphed._potionDmg = item._potionDmg || 0;
+                morphed._potionCrit = item._potionCrit || 0;
+                morphed._potionMC = item._potionMC || 0;
+                morphed._cdReduced = item._cdReduced || 0;
+                morphed.crystals = item.crystals || [];
+                morphed.essence = item.essence || null;
                 state.tower[towerIndex] = morphed;
             }
             break;
